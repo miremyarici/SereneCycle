@@ -66,6 +66,41 @@ Migration'ları uygulamak için:
 dotnet ef database update --project ../SereneCycle.Infrastructure --startup-project .
 ```
 
+## Geliştirme verisi
+
+Geliştirme ortamında uygulama açılırken migration'lar uygulanır ve örnek
+veri yazılır (`DevelopmentDataSeeder`). Idempotenttir, tekrar tekrar
+çalıştırılabilir. Kapatmak için: `"SeedDevelopmentData": false`.
+
+Hazır gelen test hesabı — e-posta doğrulaması atlanmış durumda, doğrudan
+giriş yapabilirsin:
+
+```
+E-posta: test@serenecycle.app
+Şifre  : Test1234!
+```
+
+Bu hesapla birlikte gelenler:
+
+- 3 döngü kaydı; sonuncusu **bugünü döngünün 7. gününe** denk getirir
+  (foliküler faz — tasarım mockup'ındaki "Day 7 of 28" durumu)
+- 2 günlük kayıt (biri semptomlu, biri duygulu)
+- 4 faz × beslenme/hareket için 29 içerik maddesi
+
+Hızlı deneme:
+
+```bash
+curl -X POST http://localhost:5080/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"test@serenecycle.app","password":"Test1234!"}'
+```
+
+Dönen `accessToken` ile korumalı uçlar çağrılır:
+
+```bash
+curl http://localhost:5080/phase/today -H "Authorization: Bearer <token>"
+```
+
 ## E-posta: Gmail API kurulumu
 
 Geliştirmede varsayılan olarak **e-posta gönderilmez**, doğrulama kodu

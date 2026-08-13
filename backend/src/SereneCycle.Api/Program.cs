@@ -4,8 +4,10 @@ using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
+using Microsoft.EntityFrameworkCore;
 using SereneCycle.Infrastructure;
 using SereneCycle.Infrastructure.Options;
+using SereneCycle.Infrastructure.Persistence;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -101,6 +103,17 @@ if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
     app.UseSwaggerUI();
+
+    // Geliştirmede şema otomatik güncellenir ve örnek veri yazılır.
+    // Üretimde migration'lar bilinçli olarak elle uygulanır.
+    using var scope = app.Services.CreateScope();
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    await db.Database.MigrateAsync();
+
+    if (app.Configuration.GetValue("SeedDevelopmentData", true))
+    {
+        await DevelopmentDataSeeder.SeedAsync(scope.ServiceProvider);
+    }
 }
 
 app.UseHttpsRedirection();

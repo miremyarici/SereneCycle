@@ -247,7 +247,7 @@ namespace SereneCycle.Infrastructure.Persistence.Migrations
 
                     b.ToTable("daily_logs", null, t =>
                         {
-                            t.HasCheckConstraint("ck_daily_logs_flow_range", "flow IS NULL OR flow BETWEEN 0 AND 3");
+                            t.HasCheckConstraint("ck_daily_logs_flow_range", "\"Flow\" IS NULL OR \"Flow\" BETWEEN 0 AND 3");
                         });
                 });
 

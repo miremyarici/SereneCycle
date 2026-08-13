@@ -106,7 +106,7 @@ namespace SereneCycle.Infrastructure.Persistence.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_daily_logs", x => x.Id);
-                    table.CheckConstraint("ck_daily_logs_flow_range", "flow IS NULL OR flow BETWEEN 0 AND 3");
+                    table.CheckConstraint("ck_daily_logs_flow_range", "\"Flow\" IS NULL OR \"Flow\" BETWEEN 0 AND 3");
                 });
 
             migrationBuilder.CreateTable(
