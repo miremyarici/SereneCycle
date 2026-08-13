@@ -1,0 +1,157 @@
+<!-- Giriş Yap -->
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" name="viewport"/>
+<title>Serene Cycle - Log In</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Merriweather:wght@400;700&amp;family=Plus+Jakarta+Sans:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-error-container": "#93000a",
+                        "on-tertiary-fixed-variant": "#4e453c",
+                        "on-error": "#ffffff",
+                        "on-primary-container": "#ffd5bd",
+                        "surface-container-low": "#fff1eb",
+                        "surface-container": "#ffeae0",
+                        "error": "#ba1a1a",
+                        "tertiary": "#52483f",
+                        "on-secondary-fixed": "#281808",
+                        "primary-fixed-dim": "#eabda2",
+                        "on-secondary-fixed-variant": "#58432f",
+                        "primary": "#63432e",
+                        "inverse-primary": "#eabda2",
+                        "secondary-fixed-dim": "#e0c1a7",
+                        "on-tertiary-container": "#eadbce",
+                        "surface-tint": "#795741",
+                        "on-background": "#29170e",
+                        "inverse-surface": "#412c21",
+                        "on-tertiary-fixed": "#211a12",
+                        "tertiary-fixed-dim": "#d2c4b8",
+                        "outline-variant": "#d4c3bb",
+                        "surface": "#fff8f6",
+                        "on-surface-variant": "#50443e",
+                        "on-surface": "#29170e",
+                        "on-tertiary": "#ffffff",
+                        "secondary": "#715a45",
+                        "on-secondary-container": "#765e49",
+                        "on-primary-fixed-variant": "#5f402b",
+                        "surface-dim": "#f6d3c3",
+                        "on-secondary": "#ffffff",
+                        "secondary-fixed": "#fdddc2",
+                        "background": "#fff8f6",
+                        "on-primary": "#ffffff",
+                        "tertiary-container": "#6a6056",
+                        "inverse-on-surface": "#ffede6",
+                        "surface-variant": "#ffdbcb",
+                        "tertiary-fixed": "#eee0d3",
+                        "secondary-container": "#fadabf",
+                        "primary-fixed": "#ffdbc7",
+                        "surface-container-lowest": "#ffffff",
+                        "primary-container": "#7d5a44",
+                        "surface-bright": "#fff8f6",
+                        "surface-container-highest": "#ffdbcb",
+                        "error-container": "#ffdad6",
+                        "on-primary-fixed": "#2d1505",
+                        "surface-container-high": "#ffe2d6",
+                        "outline": "#82746d",
+                        "page-bg": "#f5f0ea"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "16px",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "container-padding": "24px",
+                        "stack-gap-sm": "12px",
+                        "base": "8px",
+                        "card-margin": "16px",
+                        "stack-gap-md": "20px"
+                    },
+                    "fontFamily": {
+                        "display-lg": ["Merriweather"],
+                        "body-lg": ["Plus Jakarta Sans"],
+                        "headline-md": ["Merriweather"],
+                        "headline-lg": ["Merriweather"],
+                        "label-sm": ["Plus Jakarta Sans"],
+                        "body-md": ["Plus Jakarta Sans"],
+                        "label-md": ["Plus Jakarta Sans"]
+                    },
+                    "fontSize": {
+                        "display-lg": ["32px", { "lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "600" }],
+                        "body-lg": ["18px", { "lineHeight": "28px", "fontWeight": "400" }],
+                        "headline-md": ["20px", { "lineHeight": "28px", "fontWeight": "600" }],
+                        "headline-lg": ["24px", { "lineHeight": "32px", "fontWeight": "600" }],
+                        "label-sm": ["12px", { "lineHeight": "16px", "fontWeight": "500" }],
+                        "body-md": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                        "label-md": ["14px", { "lineHeight": "20px", "letterSpacing": "0.01em", "fontWeight": "600" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body {
+            background-color: #f5f0ea;
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="antialiased min-h-screen flex flex-col items-center justify-start pb-safe text-on-surface">
+<!-- TopAppBar: Minimal Entry Header -->
+<header class="w-full top-0 sticky flex items-center px-container-padding py-base max-w-screen-xl mx-auto justify-center bg-transparent pt-12 pb-8">
+<h1 class="font-display-lg text-display-lg text-primary text-center">Serene Cycle</h1>
+</header>
+<!-- Main Content Canvas (Transactional Page - No Nav) -->
+<main class="w-full max-w-md px-container-padding flex-1 flex flex-col justify-center">
+<div class="bg-surface-container-lowest rounded-xl shadow-[0px_4px_20px_rgba(74,52,41,0.06)] p-[20px] w-full flex flex-col gap-stack-gap-md mb-8">
+<h2 class="font-headline-lg text-headline-lg text-on-surface text-center mb-2">Welcome Back</h2>
+<p class="font-body-md text-body-md text-on-surface-variant text-center mb-4">Please log in to continue your journey.</p>
+<form class="flex flex-col gap-stack-gap-md w-full">
+<!-- Email Field -->
+<div class="flex flex-col gap-1 w-full">
+<label class="font-label-sm text-label-sm text-on-surface-variant ml-1" for="email">Email</label>
+<input class="w-full bg-transparent border-b border-x-0 border-t-0 border-outline-variant focus:border-primary focus:ring-0 px-1 py-2 font-body-md text-body-md text-on-surface transition-colors" id="email" name="email" placeholder="you@example.com" required="" type="email"/>
+</div>
+<!-- Password Field -->
+<div class="flex flex-col gap-1 w-full">
+<label class="font-label-sm text-label-sm text-on-surface-variant ml-1" for="password">Password</label>
+<input class="w-full bg-transparent border-b border-x-0 border-t-0 border-outline-variant focus:border-primary focus:ring-0 px-1 py-2 font-body-md text-body-md text-on-surface transition-colors" id="password" name="password" placeholder="••••••••" required="" type="password"/>
+</div>
+<!-- Actions -->
+<div class="flex flex-col gap-4 mt-4 w-full">
+<button class="w-full py-3 px-6 bg-primary-container text-on-primary-container rounded-full font-label-md text-label-md hover:opacity-90 active:scale-[0.98] transition-all duration-200" type="submit">
+                        Log In
+                    </button>
+</div>
+</form>
+</div>
+<!-- Links -->
+<div class="flex flex-col items-center gap-4 mt-6">
+<a class="font-body-md text-body-md text-primary underline hover:opacity-80 transition-opacity" href="#">
+                Forgot Password
+            </a>
+<p class="font-body-md text-body-md text-on-surface-variant">
+                New here? <a class="text-primary underline hover:opacity-80 transition-opacity font-label-md text-label-md" href="#">Sign Up</a>
+</p>
+</div>
+</main>
+</body></html>

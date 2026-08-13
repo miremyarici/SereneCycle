@@ -1,0 +1,29 @@
+# --- IDE ---
+.vscode/
+.idea/
+*.iml
+.DS_Store
+Thumbs.db
+
+# --- Flutter (mobile/ has its own generated .gitignore too) ---
+mobile/build/
+mobile/.dart_tool/
+mobile/.flutter-plugins
+mobile/.flutter-plugins-dependencies
+mobile/.packages
+mobile/**/android/local.properties
+
+# --- .NET (backend/) ---
+backend/**/bin/
+backend/**/obj/
+backend/**/*.user
+
+# --- Python / ML (ml/) ---
+ml/**/__pycache__/
+ml/**/*.pyc
+ml/**/.venv/
+ml/**/models/*.pt
+ml/**/models/*.onnx
+
+# --- Infra secrets ---
+infra/.env
