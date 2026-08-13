@@ -1,0 +1,6 @@
+@SereneCycle.Api_HostAddress = http://localhost:5147
+
+GET {{SereneCycle.Api_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

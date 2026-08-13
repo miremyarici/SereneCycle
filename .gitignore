@@ -27,3 +27,6 @@ ml/**/models/*.onnx
 
 # --- Infra secrets ---
 infra/.env
+
+# --- .NET user secrets / local config ---
+backend/**/appsettings.*.local.json
