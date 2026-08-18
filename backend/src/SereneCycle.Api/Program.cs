@@ -58,6 +58,18 @@ builder.Services
 
 builder.Services.AddAuthorization();
 
+// Flutter web geliştirmede farklı bir portta çalışıyor; tarayıcı cross-origin
+// isteği CORS olmadan engelliyor. Yalnızca geliştirme için açık.
+const string devCorsPolicy = "DevelopmentCors";
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy(devCorsPolicy, policy => policy
+        .SetIsOriginAllowed(origin =>
+            new Uri(origin).Host is "localhost" or "127.0.0.1")
+        .AllowAnyHeader()
+        .AllowAnyMethod());
+});
+
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
 {
@@ -116,7 +128,17 @@ if (app.Environment.IsDevelopment())
     }
 }
 
-app.UseHttpsRedirection();
+// Geliştirmede HTTPS'e yönlendirme yok: Android emülatörü self-signed
+// sertifikayı reddediyor ve akış gereksiz yere tıkanıyor.
+if (app.Environment.IsDevelopment())
+{
+    app.UseCors(devCorsPolicy);
+}
+else
+{
+    app.UseHttpsRedirection();
+}
+
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();

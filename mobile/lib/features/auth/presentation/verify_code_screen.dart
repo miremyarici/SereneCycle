@@ -2,20 +2,25 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/api/api_client.dart';
+import '../../../core/providers/app_providers.dart';
 import '../../../core/router/route_paths.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/pill_button.dart';
 
-class VerifyCodeScreen extends StatefulWidget {
-  const VerifyCodeScreen({super.key});
+class VerifyCodeScreen extends ConsumerStatefulWidget {
+  const VerifyCodeScreen({required this.email, super.key});
+
+  final String email;
 
   @override
-  State<VerifyCodeScreen> createState() => _VerifyCodeScreenState();
+  ConsumerState<VerifyCodeScreen> createState() => _VerifyCodeScreenState();
 }
 
-class _VerifyCodeScreenState extends State<VerifyCodeScreen> {
+class _VerifyCodeScreenState extends ConsumerState<VerifyCodeScreen> {
   static const _digitCount = 6;
   static const _resendCooldown = 30;
 
@@ -25,6 +30,7 @@ class _VerifyCodeScreenState extends State<VerifyCodeScreen> {
 
   Timer? _timer;
   int _secondsLeft = 0;
+  bool _isSubmitting = false;
 
   String get _code => _controllers.map((c) => c.text).join();
 
@@ -49,7 +55,7 @@ class _VerifyCodeScreenState extends State<VerifyCodeScreen> {
     setState(() {});
   }
 
-  void _startResendCooldown() {
+  Future<void> _startResendCooldown() async {
     setState(() => _secondsLeft = _resendCooldown);
     _timer?.cancel();
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
@@ -60,12 +66,61 @@ class _VerifyCodeScreenState extends State<VerifyCodeScreen> {
         setState(() => _secondsLeft--);
       }
     });
-    // TODO(auth): backend'e bağlanınca kodu yeniden gönderme çağrısı buraya.
+
+    try {
+      await ref.read(sereneApiProvider).resendCode(widget.email);
+    } on ApiException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.message),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    }
   }
 
-  void _submit() {
-    // TODO(auth): backend'e bağlanınca doğrulama çağrısı buraya gelecek.
-    context.go(RoutePaths.home);
+  Future<void> _submit() async {
+    if (widget.email.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('E-posta bulunamadı, lütfen tekrar kayıt ol.'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      return;
+    }
+
+    setState(() => _isSubmitting = true);
+
+    try {
+      final response =
+          await ref.read(sereneApiProvider).verifyCode(widget.email, _code);
+
+      await ref
+          .read(authControllerProvider.notifier)
+          .completeVerification(response);
+
+      if (mounted) {
+        context.go(
+          response.user.hasCompletedOnboarding
+              ? RoutePaths.home
+              : RoutePaths.onboarding,
+        );
+      }
+    } on ApiException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.message),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSubmitting = false);
+    }
   }
 
   @override
@@ -212,6 +267,7 @@ class _VerifyCodeScreenState extends State<VerifyCodeScreen> {
                   PillButton(
                     label: 'Doğrula',
                     filled: true,
+                    isLoading: _isSubmitting,
                     onPressed: isComplete ? _submit : null,
                   ),
                 ],

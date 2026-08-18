@@ -4,6 +4,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using SereneCycle.Domain.Cycles;
 using SereneCycle.Domain.Entities;
+using SereneCycle.Domain.Risk;
 using SereneCycle.Infrastructure.Identity;
 
 namespace SereneCycle.Infrastructure.Persistence;
@@ -139,7 +140,8 @@ public static class DevelopmentDataSeeder
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
 
         var cramps = await db.Symptoms
-            .FirstOrDefaultAsync(s => s.Name == "Kramp", cancellationToken);
+            .FirstOrDefaultAsync(
+                s => s.Name == "Karın krampları", cancellationToken);
         var tired = await db.Symptoms
             .FirstOrDefaultAsync(s => s.Name == "Yorgunluk", cancellationToken);
         var energetic = await db.Symptoms
@@ -149,7 +151,9 @@ public static class DevelopmentDataSeeder
         {
             UserId = user.Id,
             LogDate = today.AddDays(-6),
+            HasBleeding = true,
             Flow = FlowIntensity.Heavy,
+            BloodColor = BloodColor.Red,
             Note = "Döngünün ilk günü."
         };
 
@@ -157,11 +161,32 @@ public static class DevelopmentDataSeeder
         {
             UserId = user.Id,
             LogDate = today.AddDays(-1),
-            Flow = FlowIntensity.None,
+            HasSpotting = true,
             Note = "Enerjim yerine geldi."
         };
 
+        // Adetin kalan günleri: risk kartının şiddet/renk sayaçlarının
+        // gerçekçi bir döngü üzerinde çalıştığı görülebilsin. Bilinçli olarak
+        // hiçbir eşiği aşmıyor — geliştirmede kart "temiz" başlıyor.
+        var remainingPeriodDays = new[]
+        {
+            (Offset: -5, Flow: FlowIntensity.Heavy, Color: BloodColor.Red),
+            (Offset: -4, Flow: FlowIntensity.Medium, Color: BloodColor.Red),
+            (Offset: -3, Flow: FlowIntensity.Light, Color: BloodColor.Brown),
+            (Offset: -2, Flow: FlowIntensity.Light, Color: BloodColor.Brown)
+        }
+            .Select(day => new DailyLog
+            {
+                UserId = user.Id,
+                LogDate = today.AddDays(day.Offset),
+                HasBleeding = true,
+                Flow = day.Flow,
+                BloodColor = day.Color
+            })
+            .ToList();
+
         db.DailyLogs.AddRange(firstDay, yesterday);
+        db.DailyLogs.AddRange(remainingPeriodDays);
         await db.SaveChangesAsync(cancellationToken);
 
         var links = new List<LogSymptom>();
@@ -193,6 +218,16 @@ public static class DevelopmentDataSeeder
         if (links.Count > 0)
         {
             db.LogSymptoms.AddRange(links);
+
+            // Maske ara tablonun yedeği; gerçek akışta LogService yazıyor,
+            // burada elle eklediğimiz için ikisini birlikte tutuyoruz.
+            foreach (var log in new[] { firstDay, yesterday })
+            {
+                log.SymptomMask = SymptomMasks.Of(links
+                    .Where(l => l.LogId == log.Id)
+                    .Select(l => l.SymptomId));
+            }
+
             await db.SaveChangesAsync(cancellationToken);
         }
 

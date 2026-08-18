@@ -8,8 +8,13 @@ import '../../features/auth/presentation/new_password_screen.dart';
 import '../../features/auth/presentation/sign_up_screen.dart';
 import '../../features/auth/presentation/verify_code_screen.dart';
 import '../../features/exercise/presentation/exercise_screen.dart';
+import '../../features/home/presentation/calendar_screen.dart';
 import '../../features/home/presentation/home_screen.dart';
+import '../../features/logs/presentation/period_log_screen.dart';
 import '../../features/nutrition/presentation/nutrition_screen.dart';
+import '../../features/onboarding/presentation/onboarding_screen.dart';
+import '../../features/profile/presentation/account_settings_screen.dart';
+import '../../features/profile/presentation/cycle_settings_screen.dart';
 import '../../features/profile/presentation/profile_screen.dart';
 import 'app_shell.dart';
 import 'route_paths.dart';
@@ -37,7 +42,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: RoutePaths.verifyCode,
         name: 'verifyCode',
-        builder: (context, state) => const VerifyCodeScreen(),
+        // Bir önceki ekran e-postayı `extra` ile taşır (route param değil):
+        // hassas veri URL'e/geçmişe yazılmasın.
+        builder: (context, state) =>
+            VerifyCodeScreen(email: state.extra as String? ?? ''),
       ),
       GoRoute(
         path: RoutePaths.forgotPassword,
@@ -47,7 +55,13 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: RoutePaths.newPassword,
         name: 'newPassword',
-        builder: (context, state) => const NewPasswordScreen(),
+        builder: (context, state) =>
+            NewPasswordScreen(email: state.extra as String? ?? ''),
+      ),
+      GoRoute(
+        path: RoutePaths.onboarding,
+        name: 'onboarding',
+        builder: (context, state) => const OnboardingScreen(),
       ),
 
       // --- 4 sekmeli shell (alt menü) ---
@@ -61,6 +75,22 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 path: RoutePaths.home,
                 name: 'home',
                 builder: (context, state) => const HomeScreen(),
+                routes: [
+                  GoRoute(
+                    path: RoutePaths.calendarSegment,
+                    name: 'calendar',
+                    builder: (context, state) => const CalendarScreen(),
+                  ),
+                  GoRoute(
+                    path: RoutePaths.periodLogSegment,
+                    name: 'periodLog',
+                    // Tarih yolun bir parçası: kullanıcı geri gelip aynı
+                    // güne dönebilsin ve derin bağlantı çalışsın.
+                    builder: (context, state) => PeriodLogScreen(
+                      date: DateTime.parse(state.pathParameters['date']!),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -88,6 +118,18 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 path: RoutePaths.profile,
                 name: 'profile',
                 builder: (context, state) => const ProfileScreen(),
+                routes: [
+                  GoRoute(
+                    path: RoutePaths.accountSettingsSegment,
+                    name: 'accountSettings',
+                    builder: (context, state) => const AccountSettingsScreen(),
+                  ),
+                  GoRoute(
+                    path: RoutePaths.cycleSettingsSegment,
+                    name: 'cycleSettings',
+                    builder: (context, state) => const CycleSettingsScreen(),
+                  ),
+                ],
               ),
             ],
           ),

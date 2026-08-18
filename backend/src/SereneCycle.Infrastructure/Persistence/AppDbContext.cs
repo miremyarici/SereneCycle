@@ -11,6 +11,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
 {
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
     public DbSet<Cycle> Cycles => Set<Cycle>();
+    public DbSet<CycleRiskSummary> CycleRiskSummaries =>
+        Set<CycleRiskSummary>();
     public DbSet<DailyLog> DailyLogs => Set<DailyLog>();
     public DbSet<Symptom> Symptoms => Set<Symptom>();
     public DbSet<LogSymptom> LogSymptoms => Set<LogSymptom>();

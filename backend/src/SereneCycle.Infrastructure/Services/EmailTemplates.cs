@@ -32,6 +32,20 @@ public static class EmailTemplates
             </p>
             """);
 
+    public static string EmailChangeCode(string name, string code) =>
+        Wrap($"""
+            <p style="margin:0 0 16px;">Merhaba {Escape(name)},</p>
+            <p style="margin:0 0 24px;">
+              Serene Cycle hesabının e-posta adresini bu adresle değiştirmek
+              istedin. Onaylamak için aşağıdaki kodu uygulamaya gir:
+            </p>
+            {CodeBlock(code)}
+            <p style="margin:24px 0 0;font-size:14px;color:#50443e;">
+              Kod 15 dakika geçerlidir. Bu isteği sen yapmadıysan hiçbir şey
+              yapmana gerek yok; adres kod girilmeden değişmez.
+            </p>
+            """);
+
     private static string CodeBlock(string code) =>
         $"""
         <div style="background:#fff1eb;border-radius:16px;padding:20px;

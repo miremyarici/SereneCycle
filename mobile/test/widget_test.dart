@@ -29,25 +29,26 @@ void main() {
     expect(find.text('Yolculuğuna başla'), findsOneWidget);
   });
 
-  testWidgets('giriş yapınca 4 sekmeli shell açılır ve sekmeler değişir', (
+  testWidgets('boş form gönderilince doğrulama hataları görünür', (
     tester,
   ) async {
     await _pumpApp(tester);
 
-    await tester.enterText(
-      find.byType(TextFormField).first,
-      'test@ornek.com',
-    );
-    await tester.enterText(find.byType(TextFormField).last, 'sifre1234');
-    await tester.tap(find.text('Giriş Yap'));
+    await tester.tap(find.widgetWithText(FilledButton, 'Giriş Yap'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Ana Sayfa — Faz 1'), findsOneWidget);
+    expect(find.text('E-posta gerekli'), findsOneWidget);
+    expect(find.text('Şifre gerekli'), findsOneWidget);
+  });
 
-    // Alt menüde etiket yok; ikonla geçiş yapılıyor.
-    await tester.tap(find.byIcon(Icons.restaurant_outlined));
+  testWidgets('şifremi unuttum bağlantısı ilgili ekranı açar', (tester) async {
+    await _pumpApp(tester);
+
+    await tester.ensureVisible(find.text('Şifremi unuttum'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Şifremi unuttum'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Beslenme Desteği — Faz 2'), findsOneWidget);
+    expect(find.text('Şifreni mi unuttun?'), findsOneWidget);
   });
 }

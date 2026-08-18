@@ -30,4 +30,9 @@ abstract class AppColors {
 
   static const error = Color(0xFFBA1A1A);
   static const errorContainer = Color(0xFFFFDAD6);
+
+  /// Takvimdeki kanama damlası ve lekelenme noktası. Paletteki kahverengi
+  /// tonlarından ayrışmaları gerektiği için kendi tokenları var.
+  static const bleeding = Color(0xFFC2405A);
+  static const spotting = Color(0xFFE0913B);
 }

@@ -217,14 +217,79 @@ namespace SereneCycle.Infrastructure.Persistence.Migrations
                     b.ToTable("cycles", (string)null);
                 });
 
+            modelBuilder.Entity("SereneCycle.Domain.Entities.CycleRiskSummary", b =>
+                {
+                    b.Property<Guid>("CycleId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("BleedingDays")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("BleedingRestartCount")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("BloodColorMask")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset>("ComputedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateOnly>("CycleStartDate")
+                        .HasColumnType("date");
+
+                    b.Property<int>("HeavyDays")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("LoggedDays")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("LongestBleedingStreak")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("LongestHeavyStreak")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("PainDays")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("SpottingDays")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("SpottingOutsidePeriodDays")
+                        .HasColumnType("integer");
+
+                    b.Property<long>("SymptomMask")
+                        .HasColumnType("bigint");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("CycleId");
+
+                    b.HasIndex("UserId", "CycleStartDate")
+                        .HasDatabaseName("ix_cycle_risk_summaries_user_start");
+
+                    b.ToTable("cycle_risk_summaries", (string)null);
+                });
+
             modelBuilder.Entity("SereneCycle.Domain.Entities.DailyLog", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<string>("BloodColor")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
                     b.Property<int?>("Flow")
                         .HasColumnType("integer");
+
+                    b.Property<bool>("HasBleeding")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("HasSpotting")
+                        .HasColumnType("boolean");
 
                     b.Property<DateOnly>("LogDate")
                         .HasColumnType("date");
@@ -232,6 +297,9 @@ namespace SereneCycle.Infrastructure.Persistence.Migrations
                     b.Property<string>("Note")
                         .HasMaxLength(2000)
                         .HasColumnType("character varying(2000)");
+
+                    b.Property<long>("SymptomMask")
+                        .HasColumnType("bigint");
 
                     b.Property<DateTimeOffset>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
@@ -319,7 +387,7 @@ namespace SereneCycle.Infrastructure.Persistence.Migrations
                         {
                             Id = 1,
                             Category = "Physical",
-                            Name = "Kramp"
+                            Name = "Karın krampları"
                         },
                         new
                         {
@@ -337,7 +405,7 @@ namespace SereneCycle.Infrastructure.Persistence.Migrations
                         {
                             Id = 4,
                             Category = "Physical",
-                            Name = "Göğüs hassasiyeti"
+                            Name = "Göğüs ağrısı"
                         },
                         new
                         {
@@ -349,7 +417,7 @@ namespace SereneCycle.Infrastructure.Persistence.Migrations
                         {
                             Id = 6,
                             Category = "Physical",
-                            Name = "Sivilce"
+                            Name = "Akne"
                         },
                         new
                         {
@@ -361,7 +429,85 @@ namespace SereneCycle.Infrastructure.Persistence.Migrations
                         {
                             Id = 8,
                             Category = "Physical",
-                            Name = "İştah değişimi"
+                            Name = "İştah değişikliği"
+                        },
+                        new
+                        {
+                            Id = 9,
+                            Category = "Physical",
+                            Name = "Ateş basması"
+                        },
+                        new
+                        {
+                            Id = 10,
+                            Category = "Physical",
+                            Name = "Bulantı"
+                        },
+                        new
+                        {
+                            Id = 11,
+                            Category = "Physical",
+                            Name = "Cilt kuruluğu"
+                        },
+                        new
+                        {
+                            Id = 12,
+                            Category = "Physical",
+                            Name = "Gece terlemeleri"
+                        },
+                        new
+                        {
+                            Id = 13,
+                            Category = "Physical",
+                            Name = "Hafıza kaybı"
+                        },
+                        new
+                        {
+                            Id = 14,
+                            Category = "Physical",
+                            Name = "İdrar kaçırma"
+                        },
+                        new
+                        {
+                            Id = 15,
+                            Category = "Physical",
+                            Name = "İshal"
+                        },
+                        new
+                        {
+                            Id = 16,
+                            Category = "Physical",
+                            Name = "Kabızlık"
+                        },
+                        new
+                        {
+                            Id = 17,
+                            Category = "Physical",
+                            Name = "Pelvis ağrısı"
+                        },
+                        new
+                        {
+                            Id = 18,
+                            Category = "Physical",
+                            Name = "Saç dökülmesi"
+                        },
+                        new
+                        {
+                            Id = 19,
+                            Category = "Physical",
+                            Name = "Uyku değişiklikleri"
+                        },
+                        new
+                        {
+                            Id = 30,
+                            Category = "Physical",
+                            Name = "Üşüme"
+                        },
+                        new
+                        {
+                            Id = 31,
+                            Category = "Physical",
+                            Name = "Vajina kuruluğu"
                         },
                         new
                         {
@@ -410,6 +556,12 @@ namespace SereneCycle.Infrastructure.Persistence.Migrations
                             Id = 27,
                             Category = "Mood",
                             Name = "Hassas"
+                        },
+                        new
+                        {
+                            Id = 32,
+                            Category = "Mood",
+                            Name = "Duygudurum değişiklikleri"
                         });
                 });
 
@@ -421,6 +573,15 @@ namespace SereneCycle.Infrastructure.Persistence.Migrations
 
                     b.Property<int>("AccessFailedCount")
                         .HasColumnType("integer");
+
+                    b.Property<string>("AvatarContentType")
+                        .HasColumnType("text");
+
+                    b.Property<byte[]>("AvatarData")
+                        .HasColumnType("bytea");
+
+                    b.Property<DateTimeOffset?>("AvatarUpdatedAt")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<int>("AvgCycleLength")
                         .HasColumnType("integer");
@@ -438,6 +599,15 @@ namespace SereneCycle.Infrastructure.Persistence.Migrations
                     b.Property<string>("Email")
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)");
+
+                    b.Property<int>("EmailChangeAttemptCount")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset?>("EmailChangeCodeExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("EmailChangeCodeHash")
+                        .HasColumnType("text");
 
                     b.Property<bool>("EmailConfirmed")
                         .HasColumnType("boolean");
@@ -462,6 +632,9 @@ namespace SereneCycle.Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(256)");
 
                     b.Property<string>("PasswordHash")
+                        .HasColumnType("text");
+
+                    b.Property<string>("PendingEmail")
                         .HasColumnType("text");
 
                     b.Property<string>("PhoneNumber")
@@ -582,6 +755,15 @@ namespace SereneCycle.Infrastructure.Persistence.Migrations
                     b.HasOne("SereneCycle.Infrastructure.Identity.AppUser", null)
                         .WithMany()
                         .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("SereneCycle.Domain.Entities.CycleRiskSummary", b =>
+                {
+                    b.HasOne("SereneCycle.Domain.Entities.Cycle", null)
+                        .WithMany()
+                        .HasForeignKey("CycleId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

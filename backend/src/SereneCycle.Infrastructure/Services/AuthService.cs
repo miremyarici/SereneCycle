@@ -315,7 +315,8 @@ public class AuthService(
                 user.EmailConfirmed,
                 user.AvgCycleLength,
                 user.AvgPeriodLength,
-                HasCompletedOnboarding: hasCycle));
+                HasCompletedOnboarding: hasCycle,
+                AvatarUpdatedAt: user.AvatarUpdatedAt));
     }
 
     private async Task RevokeAllRefreshTokensAsync(

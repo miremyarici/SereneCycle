@@ -4,8 +4,11 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using SereneCycle.Application.Abstractions;
 using SereneCycle.Application.Auth;
+using SereneCycle.Application.Content;
+using SereneCycle.Application.Logs;
 using SereneCycle.Application.Phases;
 using SereneCycle.Application.Profiles;
+using SereneCycle.Application.Risk;
 using SereneCycle.Infrastructure.Email;
 using SereneCycle.Infrastructure.Identity;
 using SereneCycle.Infrastructure.Options;
@@ -51,6 +54,11 @@ public static class DependencyInjection
         services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<IProfileService, ProfileService>();
         services.AddScoped<IPhaseService, PhaseService>();
+        services.AddScoped<IContentService, ContentService>();
+        services.AddScoped<ILogService, LogService>();
+        services.AddScoped<IRiskService, RiskService>();
+        services.AddScoped<CycleRegistrar>();
+        services.AddScoped<RiskSummaryUpdater>();
 
         if (useRealEmailSender)
         {

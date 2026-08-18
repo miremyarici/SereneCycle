@@ -1,10 +1,9 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using SereneCycle.Application.Abstractions;
 using SereneCycle.Application.Auth;
 using SereneCycle.Application.Common;
 using SereneCycle.Application.Profiles;
-using SereneCycle.Domain.Cycles;
-using SereneCycle.Domain.Entities;
 using SereneCycle.Infrastructure.Identity;
 using SereneCycle.Infrastructure.Persistence;
 
@@ -12,8 +11,19 @@ namespace SereneCycle.Infrastructure.Services;
 
 public class ProfileService(
     UserManager<AppUser> userManager,
-    AppDbContext db) : IProfileService
+    AppDbContext db,
+    CycleRegistrar cycleRegistrar,
+    IEmailSender emailSender) : IProfileService
 {
+    /// <summary>
+    /// Fotoğraf satır içinde saklandığı için üst sınır dar tutuldu; mobil
+    /// taraf zaten yüklemeden önce kareye kırpıp küçültüyor.
+    /// </summary>
+    private const int MaxAvatarBytes = 2 * 1024 * 1024;
+
+    private static readonly string[] AllowedAvatarTypes =
+        ["image/jpeg", "image/png", "image/webp"];
+
     public async Task<Result<UserSummary>> GetAsync(
         Guid userId,
         CancellationToken cancellationToken = default)
@@ -70,7 +80,7 @@ public class ProfileService(
         // Onboarding sihirbazı son adet tarihini de gönderir: ilk döngüyü açar.
         if (request.LastPeriodStart is { } startDate)
         {
-            var result = await StartCycleAsync(
+            var result = await cycleRegistrar.StartCycleAsync(
                 user, startDate, cancellationToken);
 
             if (result.IsFailure)
@@ -84,75 +94,265 @@ public class ProfileService(
             await ToSummaryAsync(user, cancellationToken));
     }
 
-    /// <summary>
-    /// Yeni adet başlangıcı kaydeder: açık döngüyü kapatır, yenisini açar ve
-    /// ortalama döngü uzunluğunu yeniden hesaplar.
-    /// </summary>
-    private async Task<Result> StartCycleAsync(
-        AppUser user,
-        DateOnly startDate,
-        CancellationToken cancellationToken)
+    // --- Profil fotoğrafı --------------------------------------------------
+
+    public async Task<Result<AvatarContent>> GetAvatarAsync(
+        Guid userId,
+        CancellationToken cancellationToken = default)
     {
-        if (startDate > DateOnly.FromDateTime(DateTime.UtcNow))
-        {
-            return Result.Failure(
-                ErrorCode.Validation,
-                "Adet başlangıcı gelecek bir tarih olamaz.");
-        }
-
-        var alreadyExists = await db.Cycles.AnyAsync(
-            c => c.UserId == user.Id && c.StartDate == startDate,
-            cancellationToken);
-
-        if (alreadyExists)
-        {
-            return Result.Success();
-        }
-
-        var previous = await db.Cycles
-            .Where(c => c.UserId == user.Id && c.StartDate < startDate)
-            .OrderByDescending(c => c.StartDate)
+        var avatar = await db.Users
+            .Where(u => u.Id == userId)
+            .Select(u => new { u.AvatarData, u.AvatarContentType })
             .FirstOrDefaultAsync(cancellationToken);
 
-        if (previous is not null)
+        if (avatar?.AvatarData is null || avatar.AvatarContentType is null)
         {
-            previous.EndDate = startDate;
-            previous.UpdatedAt = DateTimeOffset.UtcNow;
+            return Result<AvatarContent>.Failure(
+                ErrorCode.NotFound, "Profil fotoğrafı yok.");
         }
 
-        db.Cycles.Add(new Cycle
-        {
-            UserId = user.Id,
-            StartDate = startDate
-        });
+        return Result<AvatarContent>.Success(
+            new AvatarContent(avatar.AvatarData, avatar.AvatarContentType));
+    }
 
-        await db.SaveChangesAsync(cancellationToken);
-        await RecomputeAverageCycleLengthAsync(user, cancellationToken);
+    public async Task<Result<UserSummary>> UpdateAvatarAsync(
+        Guid userId,
+        UpdateAvatarRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        var user = await userManager.FindByIdAsync(userId.ToString());
+
+        if (user is null)
+        {
+            return Result<UserSummary>.Failure(
+                ErrorCode.NotFound, "Kullanıcı bulunamadı.");
+        }
+
+        var contentType = request.ContentType.Trim().ToLowerInvariant();
+
+        if (!AllowedAvatarTypes.Contains(contentType))
+        {
+            return Result<UserSummary>.Failure(
+                ErrorCode.Validation,
+                "Yalnızca JPEG, PNG ve WebP fotoğraflar yüklenebilir.");
+        }
+
+        byte[] bytes;
+
+        try
+        {
+            bytes = Convert.FromBase64String(request.Data);
+        }
+        catch (FormatException)
+        {
+            return Result<UserSummary>.Failure(
+                ErrorCode.Validation, "Fotoğraf okunamadı.");
+        }
+
+        if (bytes.Length == 0)
+        {
+            return Result<UserSummary>.Failure(
+                ErrorCode.Validation, "Fotoğraf boş.");
+        }
+
+        if (bytes.Length > MaxAvatarBytes)
+        {
+            return Result<UserSummary>.Failure(
+                ErrorCode.Validation, "Fotoğraf 2 MB'tan büyük olamaz.");
+        }
+
+        user.AvatarData = bytes;
+        user.AvatarContentType = contentType;
+        user.AvatarUpdatedAt = DateTimeOffset.UtcNow;
+        await userManager.UpdateAsync(user);
+
+        return Result<UserSummary>.Success(
+            await ToSummaryAsync(user, cancellationToken));
+    }
+
+    public async Task<Result<UserSummary>> RemoveAvatarAsync(
+        Guid userId,
+        CancellationToken cancellationToken = default)
+    {
+        var user = await userManager.FindByIdAsync(userId.ToString());
+
+        if (user is null)
+        {
+            return Result<UserSummary>.Failure(
+                ErrorCode.NotFound, "Kullanıcı bulunamadı.");
+        }
+
+        user.AvatarData = null;
+        user.AvatarContentType = null;
+        user.AvatarUpdatedAt = null;
+        await userManager.UpdateAsync(user);
+
+        return Result<UserSummary>.Success(
+            await ToSummaryAsync(user, cancellationToken));
+    }
+
+    // --- E-posta değişikliği ----------------------------------------------
+
+    public async Task<Result> RequestEmailChangeAsync(
+        Guid userId,
+        ChangeEmailRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        var user = await userManager.FindByIdAsync(userId.ToString());
+
+        if (user is null)
+        {
+            return Result.Failure(ErrorCode.NotFound, "Kullanıcı bulunamadı.");
+        }
+
+        if (!await userManager.CheckPasswordAsync(user, request.CurrentPassword))
+        {
+            return Result.Failure(ErrorCode.Unauthorized, "Şifre hatalı.");
+        }
+
+        var newEmail = request.NewEmail.Trim().ToLowerInvariant();
+
+        if (newEmail == user.Email?.ToLowerInvariant())
+        {
+            return Result.Failure(
+                ErrorCode.Validation, "Bu zaten mevcut e-posta adresin.");
+        }
+
+        var taken = await userManager.FindByEmailAsync(newEmail);
+
+        if (taken is not null)
+        {
+            return Result.Failure(
+                ErrorCode.Conflict, "Bu e-posta zaten kayıtlı.");
+        }
+
+        var code = VerificationCodeGenerator.Generate();
+
+        user.PendingEmail = newEmail;
+        user.EmailChangeCodeHash = VerificationCodeGenerator.Hash(code);
+        user.EmailChangeCodeExpiresAt =
+            DateTimeOffset.UtcNow.Add(VerificationCodeGenerator.Lifetime);
+        user.EmailChangeAttemptCount = 0;
+        await userManager.UpdateAsync(user);
+
+        // Kod yeni adrese gider: adresin gerçekten kullanıcıya ait olduğu
+        // ancak orada okunabildiğinde kanıtlanır.
+        await emailSender.SendAsync(
+            newEmail,
+            "Yeni e-posta adresini doğrula",
+            EmailTemplates.EmailChangeCode(user.Name, code),
+            cancellationToken);
 
         return Result.Success();
     }
 
-    private async Task RecomputeAverageCycleLengthAsync(
-        AppUser user,
-        CancellationToken cancellationToken)
+    public async Task<Result<UserSummary>> ConfirmEmailChangeAsync(
+        Guid userId,
+        ConfirmEmailChangeRequest request,
+        CancellationToken cancellationToken = default)
     {
-        var completed = await db.Cycles
-            .Where(c => c.UserId == user.Id && c.EndDate != null)
-            .OrderByDescending(c => c.StartDate)
-            .Take(CycleStats.DefaultWindow)
-            .Select(c => c.EndDate!.Value.DayNumber - c.StartDate.DayNumber)
-            .ToListAsync(cancellationToken);
+        var user = await userManager.FindByIdAsync(userId.ToString());
 
-        var recomputed = CycleStats.RecomputeAverageCycleLength(
-            completed, fallback: user.AvgCycleLength);
-
-        if (recomputed == user.AvgCycleLength)
+        if (user is null)
         {
-            return;
+            return Result<UserSummary>.Failure(
+                ErrorCode.NotFound, "Kullanıcı bulunamadı.");
         }
 
-        user.AvgCycleLength = recomputed;
-        await userManager.UpdateAsync(user);
+        if (user.PendingEmail is null
+            || user.EmailChangeCodeHash is null
+            || user.EmailChangeCodeExpiresAt is null
+            || user.EmailChangeCodeExpiresAt < DateTimeOffset.UtcNow)
+        {
+            return Result<UserSummary>.Failure(
+                ErrorCode.Validation, "Kod geçersiz veya süresi dolmuş.");
+        }
+
+        if (user.EmailChangeAttemptCount
+            >= VerificationCodeGenerator.MaxAttempts)
+        {
+            return Result<UserSummary>.Failure(
+                ErrorCode.Validation,
+                "Çok fazla hatalı deneme yapıldı. Yeni bir kod iste.");
+        }
+
+        if (!VerificationCodeGenerator.Verify(
+                request.Code, user.EmailChangeCodeHash))
+        {
+            user.EmailChangeAttemptCount++;
+            await userManager.UpdateAsync(user);
+
+            return Result<UserSummary>.Failure(
+                ErrorCode.Validation, "Kod geçersiz veya süresi dolmuş.");
+        }
+
+        var newEmail = user.PendingEmail;
+
+        // UserName da e-posta: giriş ekranı yeni adresi kabul etsin.
+        // Normalize edilmiş kopyaları UserManager.UpdateAsync kendisi tazeler.
+        user.Email = newEmail;
+        user.UserName = newEmail;
+        user.EmailConfirmed = true;
+        user.PendingEmail = null;
+        user.EmailChangeCodeHash = null;
+        user.EmailChangeCodeExpiresAt = null;
+        user.EmailChangeAttemptCount = 0;
+
+        var updated = await userManager.UpdateAsync(user);
+
+        if (!updated.Succeeded)
+        {
+            return Result<UserSummary>.Failure(
+                ErrorCode.Validation,
+                string.Join(" ", updated.Errors.Select(e => e.Description)));
+        }
+
+        return Result<UserSummary>.Success(
+            await ToSummaryAsync(user, cancellationToken));
+    }
+
+    // --- Şifre değişikliği -------------------------------------------------
+
+    public async Task<Result> ChangePasswordAsync(
+        Guid userId,
+        ChangePasswordRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        var user = await userManager.FindByIdAsync(userId.ToString());
+
+        if (user is null)
+        {
+            return Result.Failure(ErrorCode.NotFound, "Kullanıcı bulunamadı.");
+        }
+
+        var changed = await userManager.ChangePasswordAsync(
+            user, request.CurrentPassword, request.NewPassword);
+
+        if (!changed.Succeeded)
+        {
+            // Identity yanlış mevcut şifre için "PasswordMismatch" döner;
+            // mesajı Türkçeleştirip diğer doğrulama hatalarını olduğu gibi
+            // geçiriyoruz.
+            var mismatch = changed.Errors.Any(
+                e => e.Code == "PasswordMismatch");
+
+            return Result.Failure(
+                mismatch ? ErrorCode.Unauthorized : ErrorCode.Validation,
+                mismatch
+                    ? "Mevcut şifren hatalı."
+                    : string.Join(
+                        " ", changed.Errors.Select(e => e.Description)));
+        }
+
+        // Şifre değişti: kayıtlı bütün oturumlar düşsün. Mevcut erişim
+        // token'ı süresi dolana kadar çalışmaya devam eder, yenilenemez.
+        await db.RefreshTokens
+            .Where(t => t.UserId == userId && t.RevokedAt == null)
+            .ExecuteUpdateAsync(
+                s => s.SetProperty(t => t.RevokedAt, DateTimeOffset.UtcNow),
+                cancellationToken);
+
+        return Result.Success();
     }
 
     private async Task<UserSummary> ToSummaryAsync(
@@ -169,6 +369,7 @@ public class ProfileService(
             user.EmailConfirmed,
             user.AvgCycleLength,
             user.AvgPeriodLength,
-            HasCompletedOnboarding: hasCycle);
+            HasCompletedOnboarding: hasCycle,
+            AvatarUpdatedAt: user.AvatarUpdatedAt);
     }
 }

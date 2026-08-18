@@ -1,22 +1,28 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/api/api_client.dart';
+import '../../../core/providers/app_providers.dart';
 import '../../../core/router/route_paths.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/pill_button.dart';
 import '../../../core/widgets/soft_shadow_card.dart';
 import '../../../core/widgets/underlined_text_field.dart';
 
-class ForgotPasswordScreen extends StatefulWidget {
+class ForgotPasswordScreen extends ConsumerStatefulWidget {
   const ForgotPasswordScreen({super.key});
 
   @override
-  State<ForgotPasswordScreen> createState() => _ForgotPasswordScreenState();
+  ConsumerState<ForgotPasswordScreen> createState() =>
+      _ForgotPasswordScreenState();
 }
 
-class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
+class _ForgotPasswordScreenState
+    extends ConsumerState<ForgotPasswordScreen> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
+  bool _isLoading = false;
 
   @override
   void dispose() {
@@ -24,10 +30,31 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     super.dispose();
   }
 
-  void _submit() {
+  Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
-    // TODO(auth): backend'e bağlanınca sıfırlama kodu gönderme çağrısı buraya.
-    context.push(RoutePaths.newPassword);
+
+    final email = _emailController.text.trim();
+    setState(() => _isLoading = true);
+
+    try {
+      // Backend hangi adreslerin kayıtlı olduğunu sızdırmamak için bu uç
+      // her zaman başarı döner; kod gerçekten gitmiş olabilir ya da
+      // olmayabilir, kullanıcıya aynı şekilde devam ettiriyoruz.
+      await ref.read(sereneApiProvider).forgotPassword(email);
+
+      if (mounted) context.push(RoutePaths.newPassword, extra: email);
+    } on ApiException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.message),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
   @override
@@ -114,6 +141,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                           PillButton(
                             label: 'Sıfırlama Kodu Gönder',
                             onPressed: _submit,
+                            isLoading: _isLoading,
                           ),
                         ],
                       ),

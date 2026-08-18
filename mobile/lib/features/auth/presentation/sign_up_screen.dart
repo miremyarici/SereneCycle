@@ -1,25 +1,30 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/api/api_client.dart';
+import '../../../core/providers/app_providers.dart';
 import '../../../core/router/route_paths.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/validation/password_validator.dart';
 import '../../../core/widgets/pill_button.dart';
 import '../../../core/widgets/soft_shadow_card.dart';
 import '../../../core/widgets/underlined_text_field.dart';
 
-class SignUpScreen extends StatefulWidget {
+class SignUpScreen extends ConsumerStatefulWidget {
   const SignUpScreen({super.key});
 
   @override
-  State<SignUpScreen> createState() => _SignUpScreenState();
+  ConsumerState<SignUpScreen> createState() => _SignUpScreenState();
 }
 
-class _SignUpScreenState extends State<SignUpScreen> {
+class _SignUpScreenState extends ConsumerState<SignUpScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _obscurePassword = true;
+  bool _isLoading = false;
 
   @override
   void dispose() {
@@ -29,10 +34,32 @@ class _SignUpScreenState extends State<SignUpScreen> {
     super.dispose();
   }
 
-  void _submit() {
+  Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
-    // TODO(auth): backend'e bağlanınca kayıt çağrısı buraya gelecek.
-    context.push(RoutePaths.verifyCode);
+
+    final email = _emailController.text.trim();
+    setState(() => _isLoading = true);
+
+    try {
+      await ref.read(sereneApiProvider).register(
+            name: _nameController.text.trim(),
+            email: email,
+            password: _passwordController.text,
+          );
+
+      if (mounted) context.push(RoutePaths.verifyCode, extra: email);
+    } on ApiException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.message),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
   @override
@@ -136,20 +163,13 @@ class _SignUpScreenState extends State<SignUpScreen> {
                             () => _obscurePassword = !_obscurePassword,
                           ),
                         ),
-                        validator: (value) {
-                          if (value == null || value.isEmpty) {
-                            return 'Şifre gerekli';
-                          }
-                          if (value.length < 8) {
-                            return 'Şifre en az 8 karakter olmalı';
-                          }
-                          return null;
-                        },
+                        validator: validatePassword,
                       ),
                       const SizedBox(height: 32),
                       PillButton(
                         label: 'Hesap Oluştur',
                         onPressed: _submit,
+                        isLoading: _isLoading,
                         trailingIcon: Icons.arrow_forward,
                       ),
                       const SizedBox(height: 24),

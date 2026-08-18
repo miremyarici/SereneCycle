@@ -1,24 +1,28 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/api/api_client.dart';
+import '../../../core/providers/app_providers.dart';
 import '../../../core/router/route_paths.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/pill_button.dart';
 import '../../../core/widgets/soft_shadow_card.dart';
 import '../../../core/widgets/underlined_text_field.dart';
 
-class LoginScreen extends StatefulWidget {
+class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
 
   @override
-  State<LoginScreen> createState() => _LoginScreenState();
+  ConsumerState<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> {
+class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _obscurePassword = true;
+  bool _isLoading = false;
 
   @override
   void dispose() {
@@ -27,10 +31,38 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
-  void _submit() {
+  Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
-    // TODO(auth): backend'e bağlanınca gerçek giriş çağrısı buraya gelecek.
-    context.go(RoutePaths.home);
+
+    setState(() => _isLoading = true);
+
+    try {
+      await ref.read(authControllerProvider.notifier).signIn(
+            _emailController.text.trim(),
+            _passwordController.text,
+          );
+
+      final user = ref.read(authControllerProvider);
+
+      if (mounted) {
+        context.go(
+          (user?.hasCompletedOnboarding ?? false)
+              ? RoutePaths.home
+              : RoutePaths.onboarding,
+        );
+      }
+    } on ApiException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.message),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
   @override
@@ -128,7 +160,11 @@ class _LoginScreenState extends State<LoginScreen> {
                                     : null,
                           ),
                           const SizedBox(height: 32),
-                          PillButton(label: 'Giriş Yap', onPressed: _submit),
+                          PillButton(
+                            label: 'Giriş Yap',
+                            onPressed: _submit,
+                            isLoading: _isLoading,
+                          ),
                         ],
                       ),
                     ),

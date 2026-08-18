@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using SereneCycle.Application.Common;
 using SereneCycle.Application.Phases;
+using SereneCycle.Application.Risk;
 using SereneCycle.Domain.Cycles;
 using SereneCycle.Infrastructure.Identity;
 using SereneCycle.Infrastructure.Persistence;
@@ -11,7 +12,8 @@ namespace SereneCycle.Infrastructure.Services;
 public class PhaseService(
     UserManager<AppUser> userManager,
     AppDbContext db,
-    TimeProvider timeProvider) : IPhaseService
+    TimeProvider timeProvider,
+    IRiskService riskService) : IPhaseService
 {
     /// <summary>Ana sayfadaki yatay takvim şeridinde gösterilen gün sayısı.</summary>
     private const int CalendarStripDays = 7;
@@ -50,8 +52,18 @@ public class PhaseService(
             user.AvgPeriodLength,
             today);
 
-        var calendar = await BuildCalendarStripAsync(
-            userId, currentCycle.StartDate, user, today, cancellationToken);
+        var firstDay = today.AddDays(-(CalendarStripDays / 2));
+
+        var calendar = await BuildDaysAsync(
+            userId,
+            user,
+            firstDay,
+            firstDay.AddDays(CalendarStripDays - 1),
+            today,
+            cancellationToken);
+
+        var risk = await riskService.GetCardAsync(
+            currentCycle, today, cancellationToken);
 
         return Result<PhaseTodayResponse>.Success(new PhaseTodayResponse(
             Phase: prediction.CurrentPhase,
@@ -66,40 +78,87 @@ public class PhaseService(
             IsIrregular: prediction.IsIrregular,
             IsPeriodLate: prediction.IsPeriodLate,
             CommonMoods: PhaseContent.CommonMoodsOf(prediction.CurrentPhase),
-            CalendarStrip: calendar));
+            CalendarStrip: calendar,
+            Risk: risk));
+    }
+
+    public async Task<Result<CalendarMonthResponse>> GetMonthAsync(
+        Guid userId,
+        int year,
+        int month,
+        CancellationToken cancellationToken = default)
+    {
+        if (year is < 2000 or > 2100 || month is < 1 or > 12)
+        {
+            return Result<CalendarMonthResponse>.Failure(
+                ErrorCode.Validation, "Geçersiz ay.");
+        }
+
+        var user = await userManager.FindByIdAsync(userId.ToString());
+
+        if (user is null)
+        {
+            return Result<CalendarMonthResponse>.Failure(
+                ErrorCode.NotFound, "Kullanıcı bulunamadı.");
+        }
+
+        var today = DateOnly.FromDateTime(timeProvider.GetUtcNow().UtcDateTime);
+        var firstDay = new DateOnly(year, month, 1);
+        var lastDay = firstDay.AddDays(DateTime.DaysInMonth(year, month) - 1);
+
+        var days = await BuildDaysAsync(
+            userId, user, firstDay, lastDay, today, cancellationToken);
+
+        return Result<CalendarMonthResponse>.Success(
+            new CalendarMonthResponse(year, month, days));
     }
 
     /// <summary>
-    /// Bugünün ortada olduğu 7 günlük şerit. Her gün için fazı, adet günü
-    /// olup olmadığını ve kullanıcının o güne kayıt girip girmediğini döner.
+    /// [firstDay, lastDay] aralığındaki her gün için fazı, adet günü olup
+    /// olmadığını ve kullanıcının kaydından gelen işaretleri toplar.
     /// </summary>
-    private async Task<IReadOnlyList<CalendarDay>> BuildCalendarStripAsync(
+    private async Task<IReadOnlyList<CalendarDay>> BuildDaysAsync(
         Guid userId,
-        DateOnly cycleStart,
         AppUser user,
+        DateOnly firstDay,
+        DateOnly lastDay,
         DateOnly today,
         CancellationToken cancellationToken)
     {
-        var firstDay = today.AddDays(-(CalendarStripDays / 2));
-        var lastDay = firstDay.AddDays(CalendarStripDays - 1);
-
-        var loggedDates = await db.DailyLogs
+        var logs = await db.DailyLogs
             .Where(l => l.UserId == userId
                         && l.LogDate >= firstDay
                         && l.LogDate <= lastDay)
-            .Select(l => l.LogDate)
+            .Select(l => new
+            {
+                l.LogDate,
+                l.HasBleeding,
+                l.BloodColor,
+                l.HasSpotting
+            })
             .ToListAsync(cancellationToken);
 
-        var loggedSet = loggedDates.ToHashSet();
-        var days = new List<CalendarDay>(CalendarStripDays);
+        var logsByDate = logs.ToDictionary(l => l.LogDate);
 
-        for (var i = 0; i < CalendarStripDays; i++)
+        // Aralık geçmişe uzanabildiği için tek bir "güncel döngü" yetmiyor:
+        // her gün, o güne kadar başlamış en son döngüye göre hesaplanır.
+        var cycleStarts = await db.Cycles
+            .Where(c => c.UserId == userId && c.StartDate <= lastDay)
+            .OrderBy(c => c.StartDate)
+            .Select(c => c.StartDate)
+            .ToListAsync(cancellationToken);
+
+        var days = new List<CalendarDay>(lastDay.DayNumber - firstDay.DayNumber + 1);
+
+        for (var date = firstDay; date <= lastDay; date = date.AddDays(1))
         {
-            var date = firstDay.AddDays(i);
+            logsByDate.TryGetValue(date, out var log);
 
-            // Döngü başlangıcından önceki günler bir önceki döngüye ait;
-            // o döngünün verisi olmayabilir, bu yüzden faz hesaplamayız.
-            if (date < cycleStart)
+            var cycleStart = cycleStarts.LastOrDefault(s => s <= date);
+
+            // İlk döngüden önceki günlerin verisi yok; faz uydurmak yerine
+            // günü nötr gösteriyoruz.
+            if (cycleStart == default)
             {
                 days.Add(new CalendarDay(
                     Date: date,
@@ -107,20 +166,26 @@ public class PhaseService(
                     Phase: CyclePhase.Menstrual,
                     IsToday: date == today,
                     IsPeriodDay: false,
-                    HasLog: loggedSet.Contains(date)));
+                    HasLog: log is not null,
+                    HasBleeding: log?.HasBleeding ?? false,
+                    BloodColor: log?.BloodColor,
+                    HasSpotting: log?.HasSpotting ?? false));
                 continue;
             }
 
-            var dayPrediction = PhaseCalculator.Calculate(
+            var prediction = PhaseCalculator.Calculate(
                 cycleStart, user.AvgCycleLength, user.AvgPeriodLength, date);
 
             days.Add(new CalendarDay(
                 Date: date,
-                CycleDay: dayPrediction.CycleDay,
-                Phase: dayPrediction.CurrentPhase,
+                CycleDay: prediction.CycleDay,
+                Phase: prediction.CurrentPhase,
                 IsToday: date == today,
-                IsPeriodDay: dayPrediction.CurrentPhase == CyclePhase.Menstrual,
-                HasLog: loggedSet.Contains(date)));
+                IsPeriodDay: prediction.CurrentPhase == CyclePhase.Menstrual,
+                HasLog: log is not null,
+                HasBleeding: log?.HasBleeding ?? false,
+                BloodColor: log?.BloodColor,
+                HasSpotting: log?.HasSpotting ?? false));
         }
 
         return days;

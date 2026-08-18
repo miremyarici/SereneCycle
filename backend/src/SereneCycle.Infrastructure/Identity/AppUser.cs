@@ -29,5 +29,27 @@ public class AppUser : IdentityUser<Guid>
     /// <summary>Kaba kuvvet denemelerini sınırlamak için.</summary>
     public int VerificationAttemptCount { get; set; }
 
+    /// <summary>
+    /// Profil fotoğrafı. Ayrı bir dosya deposu kurmamak için satır içinde
+    /// tutulur; boyut <c>ProfileService</c> tarafından sınırlandırılır.
+    /// </summary>
+    public byte[]? AvatarData { get; set; }
+
+    public string? AvatarContentType { get; set; }
+
+    public DateTimeOffset? AvatarUpdatedAt { get; set; }
+
+    /// <summary>
+    /// Kullanıcının geçmek istediği ama henüz doğrulamadığı adres. Kod
+    /// onaylanana kadar <see cref="IdentityUser{TKey}.Email"/> değişmez.
+    /// </summary>
+    public string? PendingEmail { get; set; }
+
+    public string? EmailChangeCodeHash { get; set; }
+
+    public DateTimeOffset? EmailChangeCodeExpiresAt { get; set; }
+
+    public int EmailChangeAttemptCount { get; set; }
+
     public ICollection<RefreshToken> RefreshTokens { get; set; } = [];
 }

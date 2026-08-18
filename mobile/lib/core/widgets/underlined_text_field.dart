@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../theme/app_colors.dart';
 
@@ -15,6 +16,7 @@ class UnderlinedTextField extends StatelessWidget {
     this.validator,
     this.textInputAction,
     this.autofillHints,
+    this.inputFormatters,
     super.key,
   });
 
@@ -27,6 +29,7 @@ class UnderlinedTextField extends StatelessWidget {
   final String? Function(String?)? validator;
   final TextInputAction? textInputAction;
   final Iterable<String>? autofillHints;
+  final List<TextInputFormatter>? inputFormatters;
 
   @override
   Widget build(BuildContext context) {
@@ -52,6 +55,7 @@ class UnderlinedTextField extends StatelessWidget {
           validator: validator,
           textInputAction: textInputAction,
           autofillHints: autofillHints,
+          inputFormatters: inputFormatters,
           style: const TextStyle(
             fontSize: 16,
             height: 24 / 16,

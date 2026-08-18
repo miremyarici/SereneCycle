@@ -1,37 +1,88 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/api/api_client.dart';
+import '../../../core/providers/app_providers.dart';
 import '../../../core/router/route_paths.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/validation/password_validator.dart';
 import '../../../core/widgets/pill_button.dart';
 import '../../../core/widgets/soft_shadow_card.dart';
 import '../../../core/widgets/underlined_text_field.dart';
 
-class NewPasswordScreen extends StatefulWidget {
-  const NewPasswordScreen({super.key});
+class NewPasswordScreen extends ConsumerStatefulWidget {
+  const NewPasswordScreen({required this.email, super.key});
+
+  final String email;
 
   @override
-  State<NewPasswordScreen> createState() => _NewPasswordScreenState();
+  ConsumerState<NewPasswordScreen> createState() => _NewPasswordScreenState();
 }
 
-class _NewPasswordScreenState extends State<NewPasswordScreen> {
+class _NewPasswordScreenState extends ConsumerState<NewPasswordScreen> {
   final _formKey = GlobalKey<FormState>();
+  final _codeController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmController = TextEditingController();
   bool _obscurePassword = true;
   bool _obscureConfirm = true;
+  bool _isLoading = false;
 
   @override
   void dispose() {
+    _codeController.dispose();
     _passwordController.dispose();
     _confirmController.dispose();
     super.dispose();
   }
 
-  void _submit() {
+  Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
-    // TODO(auth): backend'e bağlanınca şifre sıfırlama çağrısı buraya gelecek.
-    context.go(RoutePaths.login);
+
+    if (widget.email.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'E-posta bulunamadı, lütfen "Şifremi unuttum" akışını '
+            'baştan başlat.',
+          ),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    try {
+      await ref.read(sereneApiProvider).resetPassword(
+            email: widget.email,
+            code: _codeController.text,
+            newPassword: _passwordController.text,
+          );
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Şifren güncellendi, giriş yapabilirsin.'),
+          ),
+        );
+        context.go(RoutePaths.login);
+      }
+    } on ApiException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.message),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
   @override
@@ -79,6 +130,24 @@ class _NewPasswordScreenState extends State<NewPasswordScreen> {
                       ),
                       const SizedBox(height: 32),
                       UnderlinedTextField(
+                        label: 'Doğrulama Kodu',
+                        controller: _codeController,
+                        hintText: '6 haneli kod',
+                        keyboardType: TextInputType.number,
+                        textInputAction: TextInputAction.next,
+                        inputFormatters: [
+                          FilteringTextInputFormatter.digitsOnly,
+                          LengthLimitingTextInputFormatter(6),
+                        ],
+                        validator: (value) {
+                          if (value == null || value.length != 6) {
+                            return '6 haneli kodu gir';
+                          }
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 20),
+                      UnderlinedTextField(
                         label: 'Yeni Şifre',
                         controller: _passwordController,
                         hintText: '••••••••',
@@ -97,15 +166,7 @@ class _NewPasswordScreenState extends State<NewPasswordScreen> {
                             () => _obscurePassword = !_obscurePassword,
                           ),
                         ),
-                        validator: (value) {
-                          if (value == null || value.isEmpty) {
-                            return 'Şifre gerekli';
-                          }
-                          if (value.length < 8) {
-                            return 'Şifre en az 8 karakter olmalı';
-                          }
-                          return null;
-                        },
+                        validator: validatePassword,
                       ),
                       const SizedBox(height: 20),
                       UnderlinedTextField(
@@ -135,6 +196,7 @@ class _NewPasswordScreenState extends State<NewPasswordScreen> {
                         label: 'Şifreyi Sıfırla',
                         filled: true,
                         onPressed: _submit,
+                        isLoading: _isLoading,
                       ),
                     ],
                   ),

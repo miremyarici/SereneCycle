@@ -24,4 +24,24 @@ public class PhaseController(IPhaseService phaseService) : ApiControllerBase
 
         return result.IsSuccess ? Ok(result.Value) : Problem(result);
     }
+
+    /// <summary>
+    /// Aylık takvim: verilen ayın her günü için faz, adet günü tahmini ve
+    /// kullanıcının kaydettiği kanama/lekelenme işaretleri.
+    /// </summary>
+    [HttpGet("calendar")]
+    [ProducesResponseType(
+        typeof(CalendarMonthResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<CalendarMonthResponse>> GetCalendar(
+        [FromQuery] int year,
+        [FromQuery] int month,
+        CancellationToken cancellationToken)
+    {
+        var result = await phaseService.GetMonthAsync(
+            CurrentUserId, year, month, cancellationToken);
+
+        return result.IsSuccess ? Ok(result.Value) : Problem(result);
+    }
 }

@@ -13,4 +13,25 @@ abstract class RoutePaths {
   static const nutrition = '/nutrition';
   static const exercise = '/exercise';
   static const profile = '/profile';
+
+  /// Profilin altında iç içe route: alt menü açık kalır, geri tuşu profile
+  /// döner. [cycleSettingsSegment] router'daki göreli yol, [cycleSettings]
+  /// navigasyonda kullanılan tam yol.
+  static const cycleSettingsSegment = 'cycle';
+  static const cycleSettings = '$profile/$cycleSettingsSegment';
+
+  static const accountSettingsSegment = 'account';
+  static const accountSettings = '$profile/$accountSettingsSegment';
+
+  /// Ana sayfanın altında: aylık takvim ve bir günün adet kaydı.
+  static const calendarSegment = 'calendar';
+  static const calendar = '$home/$calendarSegment';
+
+  static const periodLogSegment = 'log/:date';
+
+  /// [date] yyyy-MM-dd biçiminde.
+  static String periodLog(DateTime date) =>
+      '$home/log/${date.year.toString().padLeft(4, '0')}-'
+      '${date.month.toString().padLeft(2, '0')}-'
+      '${date.day.toString().padLeft(2, '0')}';
 }

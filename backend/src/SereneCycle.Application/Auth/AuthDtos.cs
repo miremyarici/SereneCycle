@@ -36,6 +36,10 @@ public sealed record AuthResponse(
     string RefreshToken,
     UserSummary User);
 
+/// <param name="AvatarUpdatedAt">
+/// Profil fotoğrafı yoksa null. Mobil taraf bunu önbellek anahtarı olarak
+/// kullanır: değer değişmedikçe fotoğrafı yeniden indirmez.
+/// </param>
 public sealed record UserSummary(
     Guid Id,
     string Name,
@@ -43,4 +47,5 @@ public sealed record UserSummary(
     bool EmailConfirmed,
     int AvgCycleLength,
     int AvgPeriodLength,
-    bool HasCompletedOnboarding);
+    bool HasCompletedOnboarding,
+    DateTimeOffset? AvatarUpdatedAt = null);

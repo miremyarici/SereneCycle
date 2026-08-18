@@ -17,6 +17,12 @@ public class DailyLogConfiguration : IEntityTypeConfiguration<DailyLog>
 
         builder.Property(l => l.Note).HasMaxLength(2000);
 
+        // Kan rengi de semptom kategorisi gibi okunabilir metin olarak
+        // saklanır: enum sırası değişirse eski kayıtlar bozulmasın.
+        builder.Property(l => l.BloodColor)
+            .HasConversion<string>()
+            .HasMaxLength(20);
+
         // Gün başına tek kayıt; PUT /logs/{date} bunun üzerine upsert yapar.
         builder.HasIndex(l => new { l.UserId, l.LogDate })
             .IsUnique()
