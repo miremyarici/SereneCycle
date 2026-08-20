@@ -32,11 +32,12 @@ public static class CycleStats
             return fallback;
         }
 
-        var sample = completedCycleLengthsNewestFirst
+        // Tam sayı gün döndürüyoruz; en yakın güne yuvarlanır. Araya liste
+        // konmuyor: tek geçiş yeterli, ara materyalizasyon gereksiz.
+        var average = completedCycleLengthsNewestFirst
             .Take(window)
-            .ToList();
+            .Average();
 
-        // Tam sayı gün döndürüyoruz; en yakın güne yuvarlanır.
-        return (int)Math.Round(sample.Average(), MidpointRounding.AwayFromZero);
+        return (int)Math.Round(average, MidpointRounding.AwayFromZero);
     }
 }

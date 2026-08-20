@@ -7,7 +7,9 @@ import '../../../core/api/models.dart';
 import '../../../core/providers/app_providers.dart';
 import '../../../core/router/route_paths.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_typography.dart';
 import '../../../core/widgets/async_view.dart';
+import '../../../core/widgets/section_title.dart';
 import '../../../core/widgets/soft_shadow_card.dart';
 import 'widgets/cycle_progress_ring.dart';
 import 'widgets/risk_card.dart';
@@ -16,20 +18,15 @@ import 'widgets/week_calendar_strip.dart';
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
 
+  static const _cardSpacing = 20.0;
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final phase = ref.watch(phaseTodayProvider);
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
-          'Serene Cycle',
-          style: TextStyle(
-            fontSize: 28,
-            fontWeight: FontWeight.w700,
-            color: AppColors.primary,
-          ),
-        ),
+        title: Text('Serene Cycle', style: context.text.headlineLarge),
       ),
       body: AsyncView(
         value: phase,
@@ -40,13 +37,13 @@ class HomeScreen extends ConsumerWidget {
             padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
             children: [
               _PhaseCard(phase: data),
-              const SizedBox(height: 20),
+              const SizedBox(height: _cardSpacing),
               RiskCard(risk: data.risk),
-              const SizedBox(height: 20),
+              const SizedBox(height: _cardSpacing),
               _CalendarCard(days: data.calendarStrip),
-              const SizedBox(height: 20),
+              const SizedBox(height: _cardSpacing),
               _MoodsCard(moods: data.commonMoods),
-              const SizedBox(height: 20),
+              const SizedBox(height: _cardSpacing),
               const _Disclaimer(),
             ],
           ),
@@ -70,11 +67,8 @@ class _PhaseCard extends StatelessWidget {
         children: [
           Text(
             phase.phaseName,
-            style: const TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.w600,
-              color: AppColors.primary,
-            ),
+            style:
+                context.text.headlineSmall?.copyWith(color: AppColors.primary),
           ),
           const SizedBox(height: 20),
           CycleProgressRing(
@@ -86,11 +80,8 @@ class _PhaseCard extends StatelessWidget {
           Text(
             phase.phaseDescription,
             textAlign: TextAlign.center,
-            style: const TextStyle(
-              fontSize: 16,
-              height: 24 / 16,
-              color: AppColors.onSurfaceVariant,
-            ),
+            style: context.text.bodyLarge
+                ?.copyWith(color: AppColors.onSurfaceVariant),
           ),
           const SizedBox(height: 20),
           Row(
@@ -111,7 +102,7 @@ class _PhaseCard extends StatelessWidget {
               ),
             ],
           ),
-          // Tahminlerin güveni düşükse bunu sakla­mıyoruz, açıkça söylüyoruz.
+          // Tahminlerin güveni düşükse bunu saklamıyoruz, açıkça söylüyoruz.
           if (phase.isIrregular) ...[
             const SizedBox(height: 16),
             const _Notice(
@@ -152,19 +143,14 @@ class _Prediction extends StatelessWidget {
           const SizedBox(height: 6),
           Text(
             label,
-            style: const TextStyle(
-              fontSize: 12,
-              color: AppColors.onSurfaceVariant,
-            ),
+            style: context.text.bodySmall
+                ?.copyWith(color: AppColors.onSurfaceVariant),
           ),
           const SizedBox(height: 2),
           Text(
             value,
-            style: const TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              color: AppColors.onSurface,
-            ),
+            style:
+                context.text.labelLarge?.copyWith(color: AppColors.onSurface),
           ),
         ],
       );
@@ -191,11 +177,8 @@ class _Notice extends StatelessWidget {
             Expanded(
               child: Text(
                 text,
-                style: const TextStyle(
-                  fontSize: 13,
-                  height: 18 / 13,
-                  color: AppColors.onSurfaceVariant,
-                ),
+                style: context.text.bodyMedium
+                    ?.copyWith(color: AppColors.onSurfaceVariant),
               ),
             ),
           ],
@@ -216,15 +199,7 @@ class _CalendarCard extends StatelessWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text(
-                  'BU HAFTA',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 1.2,
-                    color: AppColors.primary,
-                  ),
-                ),
+                const SectionTitle('BU HAFTA', color: AppColors.primary),
                 IconButton(
                   onPressed: () => context.push(RoutePaths.calendar),
                   tooltip: 'Tüm takvimi aç',
@@ -262,6 +237,8 @@ class _CalendarCard extends StatelessWidget {
 class _Legend extends StatelessWidget {
   const _Legend({required this.color, required this.label});
 
+  static const _dotSize = 6.0;
+
   final Color color;
   final String label;
 
@@ -270,17 +247,15 @@ class _Legend extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Container(
-            width: 6,
-            height: 6,
+            width: _dotSize,
+            height: _dotSize,
             decoration: BoxDecoration(color: color, shape: BoxShape.circle),
           ),
           const SizedBox(width: 6),
           Text(
             label,
-            style: const TextStyle(
-              fontSize: 12,
-              color: AppColors.onSurfaceVariant,
-            ),
+            style: context.text.bodySmall
+                ?.copyWith(color: AppColors.onSurfaceVariant),
           ),
         ],
       );
@@ -296,40 +271,39 @@ class _MoodsCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
+            Text(
               'Bu fazda yaygın duygular',
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.w600,
-                color: AppColors.primary,
-              ),
+              style: context.text.headlineSmall
+                  ?.copyWith(color: AppColors.primary),
             ),
             const SizedBox(height: 16),
             Wrap(
               spacing: 12,
               runSpacing: 12,
-              children: moods
-                  .map((mood) => Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 8,
-                        ),
-                        decoration: BoxDecoration(
-                          border: Border.all(color: AppColors.outlineVariant),
-                          borderRadius: BorderRadius.circular(999),
-                        ),
-                        child: Text(
-                          mood,
-                          style: const TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.onSurface,
-                          ),
-                        ),
-                      ))
-                  .toList(),
+              children: [
+                for (final mood in moods) _MoodChip(mood),
+              ],
             ),
           ],
+        ),
+      );
+}
+
+class _MoodChip extends StatelessWidget {
+  const _MoodChip(this.mood);
+
+  final String mood;
+
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          border: Border.all(color: AppColors.outlineVariant),
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: Text(
+          mood,
+          style: context.text.labelLarge?.copyWith(color: AppColors.onSurface),
         ),
       );
 }
@@ -338,9 +312,9 @@ class _Disclaimer extends StatelessWidget {
   const _Disclaimer();
 
   @override
-  Widget build(BuildContext context) => const Text(
+  Widget build(BuildContext context) => Text(
         'Bu içerik bilgilendirme amaçlıdır, tıbbi tavsiye değildir.',
         textAlign: TextAlign.center,
-        style: TextStyle(fontSize: 12, color: AppColors.outline),
+        style: context.text.bodySmall?.copyWith(color: AppColors.outline),
       );
 }

@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
 
 import 'app_colors.dart';
+import 'app_typography.dart';
 
 abstract class AppTheme {
+  /// Kart, buton ve çip köşe yarıçapları tasarımda tek bir ölçekten geliyor.
+  static const _cardRadius = 16.0;
+
   static ThemeData get light {
     final colorScheme = ColorScheme.light(
       primary: AppColors.primary,
@@ -26,10 +30,14 @@ abstract class AppTheme {
       useMaterial3: true,
       colorScheme: colorScheme,
       scaffoldBackgroundColor: AppColors.background,
-      appBarTheme: const AppBarTheme(
+      // Bütün yazı tipi kararları burada: ekranlar font ailesi set etmez.
+      textTheme: AppTypography.textTheme,
+      appBarTheme: AppBarTheme(
         backgroundColor: AppColors.background,
         foregroundColor: AppColors.primary,
         elevation: 0,
+        // Rengi AppBar `foregroundColor`'dan alır; burada yalnızca ölçek var.
+        titleTextStyle: AppTypography.textTheme.headlineSmall,
       ),
       navigationBarTheme: NavigationBarThemeData(
         backgroundColor: AppColors.surfaceContainerLowest,
@@ -48,7 +56,7 @@ abstract class AppTheme {
         color: AppColors.surfaceContainerLowest,
         elevation: 0,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(_cardRadius),
         ),
       ),
     );

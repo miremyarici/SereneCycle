@@ -15,11 +15,9 @@ public class AuthController(IAuthService authService) : ApiControllerBase
     [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<ActionResult> Register(
         RegisterRequest request,
-        CancellationToken cancellationToken)
-    {
-        var result = await authService.RegisterAsync(request, cancellationToken);
-        return result.IsSuccess ? NoContent() : Problem(result);
-    }
+        CancellationToken cancellationToken) =>
+        NoContentOrProblem(
+            await authService.RegisterAsync(request, cancellationToken));
 
     /// <summary>Doğrulama kodunu kontrol eder ve oturum açar.</summary>
     [HttpPost("verify-code")]
@@ -27,26 +25,18 @@ public class AuthController(IAuthService authService) : ApiControllerBase
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<ActionResult<AuthResponse>> VerifyCode(
         VerifyCodeRequest request,
-        CancellationToken cancellationToken)
-    {
-        var result =
-            await authService.VerifyCodeAsync(request, cancellationToken);
-
-        return result.IsSuccess ? Ok(result.Value) : Problem(result);
-    }
+        CancellationToken cancellationToken) =>
+        OkOrProblem(
+            await authService.VerifyCodeAsync(request, cancellationToken));
 
     /// <summary>Doğrulama kodunu yeniden gönderir.</summary>
     [HttpPost("resend-code")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     public async Task<ActionResult> ResendCode(
         ResendCodeRequest request,
-        CancellationToken cancellationToken)
-    {
-        var result = await authService.ResendVerificationCodeAsync(
-            request, cancellationToken);
-
-        return result.IsSuccess ? NoContent() : Problem(result);
-    }
+        CancellationToken cancellationToken) =>
+        NoContentOrProblem(await authService.ResendVerificationCodeAsync(
+            request, cancellationToken));
 
     [HttpPost("login")]
     [ProducesResponseType(typeof(AuthResponse), StatusCodes.Status200OK)]
@@ -54,11 +44,8 @@ public class AuthController(IAuthService authService) : ApiControllerBase
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<ActionResult<AuthResponse>> Login(
         LoginRequest request,
-        CancellationToken cancellationToken)
-    {
-        var result = await authService.LoginAsync(request, cancellationToken);
-        return result.IsSuccess ? Ok(result.Value) : Problem(result);
-    }
+        CancellationToken cancellationToken) =>
+        OkOrProblem(await authService.LoginAsync(request, cancellationToken));
 
     /// <summary>
     /// Şifre sıfırlama kodu gönderir. E-posta kayıtlı olmasa da 204 döner —
@@ -68,26 +55,18 @@ public class AuthController(IAuthService authService) : ApiControllerBase
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     public async Task<ActionResult> ForgotPassword(
         ForgotPasswordRequest request,
-        CancellationToken cancellationToken)
-    {
-        var result =
-            await authService.ForgotPasswordAsync(request, cancellationToken);
-
-        return result.IsSuccess ? NoContent() : Problem(result);
-    }
+        CancellationToken cancellationToken) =>
+        NoContentOrProblem(
+            await authService.ForgotPasswordAsync(request, cancellationToken));
 
     [HttpPost("reset-password")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<ActionResult> ResetPassword(
         ResetPasswordRequest request,
-        CancellationToken cancellationToken)
-    {
-        var result =
-            await authService.ResetPasswordAsync(request, cancellationToken);
-
-        return result.IsSuccess ? NoContent() : Problem(result);
-    }
+        CancellationToken cancellationToken) =>
+        NoContentOrProblem(
+            await authService.ResetPasswordAsync(request, cancellationToken));
 
     /// <summary>
     /// Refresh token ile yeni token çifti alır. Kullanılan refresh token
@@ -98,11 +77,7 @@ public class AuthController(IAuthService authService) : ApiControllerBase
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     public async Task<ActionResult<AuthResponse>> Refresh(
         RefreshTokenRequest request,
-        CancellationToken cancellationToken)
-    {
-        var result =
-            await authService.RefreshTokenAsync(request, cancellationToken);
-
-        return result.IsSuccess ? Ok(result.Value) : Problem(result);
-    }
+        CancellationToken cancellationToken) =>
+        OkOrProblem(
+            await authService.RefreshTokenAsync(request, cancellationToken));
 }

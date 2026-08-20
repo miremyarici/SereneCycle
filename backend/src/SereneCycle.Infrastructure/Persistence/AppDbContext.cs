@@ -18,6 +18,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
     public DbSet<LogSymptom> LogSymptoms => Set<LogSymptom>();
     public DbSet<ContentItem> ContentItems => Set<ContentItem>();
     public DbSet<FoodPhaseScore> FoodPhaseScores => Set<FoodPhaseScore>();
+    public DbSet<UserTasteProfile> UserTasteProfiles =>
+        Set<UserTasteProfile>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {

@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Identity;
+using SereneCycle.Domain.Content;
 
 namespace SereneCycle.Infrastructure.Identity;
 
@@ -15,6 +16,14 @@ public class AppUser : IdentityUser<Guid>
     public int AvgCycleLength { get; set; } = 28;
 
     public int AvgPeriodLength { get; set; } = 5;
+
+    /// <summary>
+    /// Öneri motorunun sert filtresi: alerji, diyet, sakatlık, hamilelik ve
+    /// "elimde yok" denen ekipmanların <see cref="ContraTag"/> maskesi.
+    /// Kuralla kesin bilinen bu kısıtlar öğrenilmez — yasaklı öğe, bandit
+    /// onu hiç görmeden aday kümesinden çıkarılır.
+    /// </summary>
+    public long AvoidMask { get; set; }
 
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 

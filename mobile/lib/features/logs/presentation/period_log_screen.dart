@@ -7,9 +7,12 @@ import '../../../core/api/api_client.dart';
 import '../../../core/api/models.dart';
 import '../../../core/providers/app_providers.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_typography.dart';
 import '../../../core/theme/blood_colors.dart';
+import '../../../core/widgets/app_snack_bar.dart';
 import '../../../core/widgets/async_view.dart';
 import '../../../core/widgets/pill_button.dart';
+import '../../../core/widgets/section_title.dart';
 import '../../../core/widgets/soft_shadow_card.dart';
 
 /// Takvimde bir güne dokununca açılır: o günün kanama, kan rengi,
@@ -27,14 +30,7 @@ class PeriodLogScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(
-          DateFormat('d MMMM yyyy', 'tr').format(day),
-          style: const TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.w600,
-            color: AppColors.primary,
-          ),
-        ),
+        title: Text(DateFormat('d MMMM yyyy', 'tr').format(day)),
         centerTitle: true,
       ),
       // İki istek de gerekli: form başlangıç değerlerini bir kez okuduğu
@@ -103,22 +99,19 @@ class _LogFormState extends ConsumerState<_LogForm> {
 
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Gün kaydedildi.')),
-      );
+      context.showMessage('Gün kaydedildi.');
       context.pop();
     } on ApiException catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(e.message),
-            backgroundColor: AppColors.error,
-          ),
-        );
-      }
+      if (mounted) context.showError(e.message);
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
+  }
+
+  void _toggleSymptom(int id) {
+    setState(() {
+      if (!_symptomIds.remove(id)) _symptomIds.add(id);
+    });
   }
 
   @override
@@ -126,63 +119,19 @@ class _LogFormState extends ConsumerState<_LogForm> {
         padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
         children: [
           SoftShadowCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const _CardTitle('KANAMA'),
-                const SizedBox(height: 8),
-                _SwitchRow(
-                  label: 'Kanama var',
-                  value: _hasBleeding,
-                  onChanged: _isSaving
-                      ? null
-                      : (value) => setState(() => _hasBleeding = value),
-                ),
-                // Şiddet ve renk yalnızca kanama varken sorulur.
-                if (_hasBleeding) ...[
-                  const Divider(height: 24, color: AppColors.outlineVariant),
-                  const _FieldLabel('Kanama düzeyi'),
-                  const SizedBox(height: 12),
-                  Wrap(
-                    spacing: 12,
-                    runSpacing: 12,
-                    children: FlowLevel.values
-                        .map((level) => _ChoiceChip(
-                              label: level.label,
-                              selected: _flow == level,
-                              onTap: _isSaving
-                                  ? null
-                                  : () => setState(
-                                        () => _flow =
-                                            _flow == level ? null : level,
-                                      ),
-                            ))
-                        .toList(),
-                  ),
-                  const SizedBox(height: 24),
-                  const _FieldLabel('Kan rengi'),
-                  const SizedBox(height: 12),
-                  Wrap(
-                    spacing: 12,
-                    runSpacing: 12,
-                    children: BloodColorOption.values
-                        .map((option) => _ChoiceChip(
-                              label: option.label,
-                              selected: _bloodColor == option,
-                              swatch: option.swatch,
-                              onTap: _isSaving
-                                  ? null
-                                  : () => setState(
-                                        () => _bloodColor =
-                                            _bloodColor == option
-                                                ? null
-                                                : option,
-                                      ),
-                            ))
-                        .toList(),
-                  ),
-                ],
-              ],
+            child: _BleedingSection(
+              hasBleeding: _hasBleeding,
+              flow: _flow,
+              bloodColor: _bloodColor,
+              isEnabled: !_isSaving,
+              onBleedingChanged: (value) =>
+                  setState(() => _hasBleeding = value),
+              // Aynı seçeneğe tekrar dokunmak seçimi kaldırır.
+              onFlowTap: (level) =>
+                  setState(() => _flow = _flow == level ? null : level),
+              onBloodColorTap: (option) => setState(
+                () => _bloodColor = _bloodColor == option ? null : option,
+              ),
             ),
           ),
           const SizedBox(height: 20),
@@ -190,13 +139,12 @@ class _LogFormState extends ConsumerState<_LogForm> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const _CardTitle('LEKELENME'),
+                const SectionTitle('LEKELENME'),
                 const SizedBox(height: 8),
                 _SwitchRow(
                   label: 'Lekelenme var',
-                  helperText:
-                      'Takvimde damlanın altında ayrı bir nokta olarak '
-                      'görünür.',
+                  helperText: 'Takvimde damlanın altında ayrı bir nokta '
+                      'olarak görünür.',
                   value: _hasSpotting,
                   onChanged: _isSaving
                       ? null
@@ -210,24 +158,18 @@ class _LogFormState extends ConsumerState<_LogForm> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const _CardTitle('BELİRTİLER'),
+                const SectionTitle('BELİRTİLER'),
                 const SizedBox(height: 16),
-                Wrap(
-                  spacing: 12,
-                  runSpacing: 12,
-                  children: widget.symptomOptions
-                      .map((option) => _ChoiceChip(
-                            label: option.name,
-                            selected: _symptomIds.contains(option.id),
-                            onTap: _isSaving
-                                ? null
-                                : () => setState(() {
-                                      if (!_symptomIds.remove(option.id)) {
-                                        _symptomIds.add(option.id);
-                                      }
-                                    }),
-                          ))
-                      .toList(),
+                _ChipRow(
+                  children: [
+                    for (final option in widget.symptomOptions)
+                      _SelectableChip(
+                        label: option.name,
+                        selected: _symptomIds.contains(option.id),
+                        onTap:
+                            _isSaving ? null : () => _toggleSymptom(option.id),
+                      ),
+                  ],
                 ),
               ],
             ),
@@ -240,6 +182,87 @@ class _LogFormState extends ConsumerState<_LogForm> {
             onPressed: _save,
           ),
         ],
+      );
+}
+
+/// Kanama anahtarı ve —açıksa— düzey/renk seçimleri.
+class _BleedingSection extends StatelessWidget {
+  const _BleedingSection({
+    required this.hasBleeding,
+    required this.flow,
+    required this.bloodColor,
+    required this.isEnabled,
+    required this.onBleedingChanged,
+    required this.onFlowTap,
+    required this.onBloodColorTap,
+  });
+
+  final bool hasBleeding;
+  final FlowLevel? flow;
+  final BloodColorOption? bloodColor;
+  final bool isEnabled;
+  final ValueChanged<bool> onBleedingChanged;
+  final ValueChanged<FlowLevel> onFlowTap;
+  final ValueChanged<BloodColorOption> onBloodColorTap;
+
+  @override
+  Widget build(BuildContext context) => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SectionTitle('KANAMA'),
+          const SizedBox(height: 8),
+          _SwitchRow(
+            label: 'Kanama var',
+            value: hasBleeding,
+            onChanged: isEnabled ? onBleedingChanged : null,
+          ),
+          // Şiddet ve renk yalnızca kanama varken sorulur.
+          if (hasBleeding) ...[
+            const Divider(height: 24, color: AppColors.outlineVariant),
+            const _FieldLabel('Kanama düzeyi'),
+            const SizedBox(height: 12),
+            _ChipRow(
+              children: [
+                for (final level in FlowLevel.values)
+                  _SelectableChip(
+                    label: level.label,
+                    selected: flow == level,
+                    onTap: isEnabled ? () => onFlowTap(level) : null,
+                  ),
+              ],
+            ),
+            const SizedBox(height: 24),
+            const _FieldLabel('Kan rengi'),
+            const SizedBox(height: 12),
+            _ChipRow(
+              children: [
+                for (final option in BloodColorOption.values)
+                  _SelectableChip(
+                    label: option.label,
+                    selected: bloodColor == option,
+                    swatch: option.swatch,
+                    onTap: isEnabled ? () => onBloodColorTap(option) : null,
+                  ),
+              ],
+            ),
+          ],
+        ],
+      );
+}
+
+/// Seçim çipleri her yerde aynı boşlukla sarmalansın diye.
+class _ChipRow extends StatelessWidget {
+  const _ChipRow({required this.children});
+
+  static const _spacing = 12.0;
+
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) => Wrap(
+        spacing: _spacing,
+        runSpacing: _spacing,
+        children: children,
       );
 }
 
@@ -268,20 +291,15 @@ class _SwitchRow extends StatelessWidget {
               children: [
                 Text(
                   label,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    color: AppColors.onSurface,
-                  ),
+                  style: context.text.bodyLarge
+                      ?.copyWith(color: AppColors.onSurface),
                 ),
                 if (helperText != null) ...[
                   const SizedBox(height: 2),
                   Text(
                     helperText!,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      height: 16 / 12,
-                      color: AppColors.onSurfaceVariant,
-                    ),
+                    style: context.text.bodySmall
+                        ?.copyWith(color: AppColors.onSurfaceVariant),
                   ),
                 ],
               ],
@@ -299,13 +317,16 @@ class _SwitchRow extends StatelessWidget {
 
 /// Seçilebilir çip. Aynı bileşen hem tekli (kanama düzeyi, renk) hem çoklu
 /// (belirtiler) seçimde kullanılıyor; fark yalnızca çağıranın mantığında.
-class _ChoiceChip extends StatelessWidget {
-  const _ChoiceChip({
+class _SelectableChip extends StatelessWidget {
+  const _SelectableChip({
     required this.label,
     required this.selected,
     required this.onTap,
     this.swatch,
   });
+
+  static const _radius = 999.0;
+  static const _swatchSize = 12.0;
 
   final String label;
   final bool selected;
@@ -315,7 +336,7 @@ class _ChoiceChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) => InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(999),
+        borderRadius: BorderRadius.circular(_radius),
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           decoration: BoxDecoration(
@@ -325,15 +346,15 @@ class _ChoiceChip extends StatelessWidget {
             border: Border.all(
               color: selected ? AppColors.primary : AppColors.outlineVariant,
             ),
-            borderRadius: BorderRadius.circular(999),
+            borderRadius: BorderRadius.circular(_radius),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
               if (swatch != null) ...[
                 Container(
-                  width: 12,
-                  height: 12,
+                  width: _swatchSize,
+                  height: _swatchSize,
                   decoration: BoxDecoration(
                     color: swatch,
                     shape: BoxShape.circle,
@@ -344,9 +365,7 @@ class _ChoiceChip extends StatelessWidget {
               ],
               Text(
                 label,
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
+                style: context.text.labelLarge?.copyWith(
                   color: selected
                       ? AppColors.onPrimaryContainer
                       : AppColors.onSurface,
@@ -366,27 +385,9 @@ class _FieldLabel extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Text(
         text,
-        style: const TextStyle(
-          fontSize: 16,
+        style: context.text.bodyLarge?.copyWith(
           fontWeight: FontWeight.w500,
           color: AppColors.onSurface,
-        ),
-      );
-}
-
-class _CardTitle extends StatelessWidget {
-  const _CardTitle(this.text);
-
-  final String text;
-
-  @override
-  Widget build(BuildContext context) => Text(
-        text,
-        style: const TextStyle(
-          fontSize: 14,
-          fontWeight: FontWeight.w600,
-          letterSpacing: 1.2,
-          color: AppColors.secondary,
         ),
       );
 }

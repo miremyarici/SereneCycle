@@ -165,6 +165,8 @@ public static class RiskEvaluator
             .OrderByDescending(f => f.Level)
             .ToList();
 
-        return new RiskAssessment(ordered.Max(f => f.Level), ordered);
+        // Liste azalan sıralı: en yüksek seviye zaten başta duruyor,
+        // ayrıca bir Max taraması yapmaya gerek yok.
+        return new RiskAssessment(ordered[0].Level, ordered);
     }
 }

@@ -20,14 +20,28 @@ public class LogService(
     {
         var ids = SymptomSeedData.PeriodLogSymptomIds;
 
+        // İki kolon yeter: varlığın tamamını çekip izlemeye almanın anlamı
+        // yok, sözlük zaten salt okunur bir listeye dönüşecek.
         var names = await db.Symptoms
+            .AsNoTracking()
             .Where(s => ids.Contains(s.Id))
+            .Select(s => new { s.Id, s.Name })
             .ToDictionaryAsync(s => s.Id, s => s.Name, cancellationToken);
 
         // Sıra seed listesinden gelir; veritabanı sırasına güvenmiyoruz.
-        return [.. ids
-            .Where(names.ContainsKey)
-            .Select(id => new SymptomOption(id, names[id]))];
+        var options = new List<SymptomOption>(ids.Length);
+
+        foreach (var id in ids)
+        {
+            // Tek arama: önceki hâl ContainsKey + indeksleyici ile aynı
+            // anahtarı iki kez tarıyordu.
+            if (names.TryGetValue(id, out var name))
+            {
+                options.Add(new SymptomOption(id, name));
+            }
+        }
+
+        return options;
     }
 
     public async Task<Result<DailyLogResponse>> GetAsync(
@@ -51,12 +65,16 @@ public class LogService(
         SaveDailyLogRequest request,
         CancellationToken cancellationToken = default)
     {
-        var user = await userManager.FindByIdAsync(userId.ToString());
+        // Varlık kontrolü ucuz bir sorguyla yapılır; kullanıcı satırının
+        // tamamı (satır içinde tutulan 2 MB'a kadar avatar dahil) yalnızca
+        // döngü kaydı gerçekten gerektiğinde çekilir.
+        var userExists = await db.Users
+            .AnyAsync(u => u.Id == userId, cancellationToken);
 
-        if (user is null)
+        if (!userExists)
         {
             return Result<DailyLogResponse>.Failure(
-                ErrorCode.NotFound, "Kullanıcı bulunamadı.");
+                ErrorCode.NotFound, ServiceErrors.UserNotFound);
         }
 
         var symptomIds = (request.SymptomIds ?? []).Distinct().ToList();
@@ -128,6 +146,16 @@ public class LogService(
 
         if (request.HasBleeding)
         {
+            // Döngü kaydı ortalama döngü uzunluğunu güncelleyebildiği için
+            // burada izlenen varlığın kendisi gerekiyor.
+            var user = await userManager.FindByIdAsync(userId.ToString());
+
+            if (user is null)
+            {
+                return Result<DailyLogResponse>.Failure(
+                    ErrorCode.NotFound, ServiceErrors.UserNotFound);
+            }
+
             var registered = await cycleRegistrar.RegisterBleedingDayAsync(
                 user, date, cancellationToken);
 

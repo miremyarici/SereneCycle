@@ -15,12 +15,22 @@ namespace SereneCycle.Infrastructure.Persistence;
 /// yerine gerçek yolu kullanır.
 ///
 /// Idempotent: birden çok kez çalıştırılabilir, var olanı tekrar eklemez.
-/// Üretimde asla çağrılmaz (Program.cs ortama göre karar verir).
+/// Üretimde asla çağrılmaz (Program.cs ortama göre karar verir) ve
+/// yapılandırmadan kapatılabilir.
+///
+/// Faz içerik kataloğu buraya <b>dahil değil</b>: o örnek veri değil,
+/// uygulamanın çalışması için gereken referans veridir ve
+/// <see cref="ContentCatalogSeeder"/> tarafından her açılışta hizalanır.
 /// </summary>
 public static class DevelopmentDataSeeder
 {
     public const string TestUserEmail = "test@serenecycle.app";
     public const string TestUserPassword = "Test1234!";
+
+    // Örnek günlüklere bağlanan semptomlar; adlar SymptomSeedData ile birebir.
+    private const string CrampsSymptom = "Karın krampları";
+    private const string TiredSymptom = "Yorgunluk";
+    private const string EnergeticSymptom = "Enerjik";
 
     public static async Task SeedAsync(
         IServiceProvider services,
@@ -35,7 +45,6 @@ public static class DevelopmentDataSeeder
         var user = await EnsureTestUserAsync(userManager, logger);
         await EnsureCycleAsync(db, user, logger, cancellationToken);
         await EnsureDailyLogsAsync(db, user, logger, cancellationToken);
-        await EnsureContentItemsAsync(db, logger, cancellationToken);
 
         logger.LogInformation(
             "Geliştirme verisi hazır. Giriş: {Email} / {Password}",
@@ -139,13 +148,14 @@ public static class DevelopmentDataSeeder
 
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
 
-        var cramps = await db.Symptoms
-            .FirstOrDefaultAsync(
-                s => s.Name == "Karın krampları", cancellationToken);
-        var tired = await db.Symptoms
-            .FirstOrDefaultAsync(s => s.Name == "Yorgunluk", cancellationToken);
-        var energetic = await db.Symptoms
-            .FirstOrDefaultAsync(s => s.Name == "Enerjik", cancellationToken);
+        // Üç ayrı gidiş-dönüş yerine tek sorgu: örnek kayıtların bağlanacağı
+        // semptomların id'leri bir kerede okunur.
+        string[] names = [CrampsSymptom, TiredSymptom, EnergeticSymptom];
+
+        var symptomIdsByName = await db.Symptoms
+            .AsNoTracking()
+            .Where(s => names.Contains(s.Name))
+            .ToDictionaryAsync(s => s.Name, s => s.Id, cancellationToken);
 
         var firstDay = new DailyLog
         {
@@ -189,30 +199,21 @@ public static class DevelopmentDataSeeder
         db.DailyLogs.AddRange(remainingPeriodDays);
         await db.SaveChangesAsync(cancellationToken);
 
-        var links = new List<LogSymptom>();
+        var links = new List<LogSymptom>(names.Length);
 
-        if (cramps is not null)
-        {
-            links.Add(new LogSymptom
-            {
-                LogId = firstDay.Id, SymptomId = cramps.Id
-            });
-        }
+        Link(firstDay, CrampsSymptom);
+        Link(firstDay, TiredSymptom);
+        Link(yesterday, EnergeticSymptom);
 
-        if (tired is not null)
+        void Link(DailyLog log, string symptomName)
         {
-            links.Add(new LogSymptom
+            if (symptomIdsByName.TryGetValue(symptomName, out var symptomId))
             {
-                LogId = firstDay.Id, SymptomId = tired.Id
-            });
-        }
-
-        if (energetic is not null)
-        {
-            links.Add(new LogSymptom
-            {
-                LogId = yesterday.Id, SymptomId = energetic.Id
-            });
+                links.Add(new LogSymptom
+                {
+                    LogId = log.Id, SymptomId = symptomId
+                });
+            }
         }
 
         if (links.Count > 0)
@@ -233,93 +234,4 @@ public static class DevelopmentDataSeeder
 
         logger.LogInformation("Örnek günlük kayıtlar eklendi.");
     }
-
-    /// <summary>
-    /// Faz 2'nin beslenme/hareket içeriği. Dil bilinçli olarak yumuşak:
-    /// "yasak" değil "sınırlı tüket", ve her maddede gerekçe var.
-    /// </summary>
-    private static async Task EnsureContentItemsAsync(
-        AppDbContext db,
-        ILogger logger,
-        CancellationToken cancellationToken)
-    {
-        if (await db.ContentItems.AnyAsync(cancellationToken))
-        {
-            return;
-        }
-
-        db.ContentItems.AddRange(
-            // --- Menstrüel ---
-            Item(CyclePhase.Menstrual, ContentType.FoodDo, "Ispanak",
-                "Demir açısından zengin; kanamayla kaybedilen demiri desteklemeye yardımcı olabilir."),
-            Item(CyclePhase.Menstrual, ContentType.FoodDo, "Somon",
-                "Omega-3 içerir; bazı kişilerde kramp şiddetini azalttığı bildirilmiştir."),
-            Item(CyclePhase.Menstrual, ContentType.FoodDo, "Ceviz",
-                "Magnezyum kaynağı; kas gevşemesine katkı sağlayabilir."),
-            Item(CyclePhase.Menstrual, ContentType.FoodAvoid, "Aşırı tuz",
-                "Şişkinlik hissini artırabilir; sınırlı tüketmek rahatlatabilir."),
-            Item(CyclePhase.Menstrual, ContentType.FoodAvoid, "Kafein",
-                "Bazı kişilerde kramp ve huzursuzluğu artırabilir."),
-            Item(CyclePhase.Menstrual, ContentType.ExerciseDo, "Yoga",
-                "Nazik esneme, kas gerginliğini azaltmaya yardımcı olabilir."),
-            Item(CyclePhase.Menstrual, ContentType.ExerciseDo, "Yürüyüş",
-                "Hafif hareket, dolaşımı destekler ve zorlamaz."),
-            Item(CyclePhase.Menstrual, ContentType.ExerciseAvoid, "HIIT",
-                "Yüksek yoğunluk bu dönemde bazı kişilere ağır gelebilir."),
-
-            // --- Foliküler ---
-            Item(CyclePhase.Follicular, ContentType.FoodDo, "Yumurta",
-                "Kaliteli protein; yükselen enerjiyi desteklemeye uygun."),
-            Item(CyclePhase.Follicular, ContentType.FoodDo, "Avokado",
-                "Sağlıklı yağlar içerir, hormon dengesi için faydalı yağ asitleri sağlar."),
-            Item(CyclePhase.Follicular, ContentType.FoodDo, "Yeşil yapraklılar",
-                "Folat ve lif açısından zengin."),
-            Item(CyclePhase.Follicular, ContentType.FoodAvoid, "İşlenmiş şeker",
-                "Enerji dalgalanmalarına yol açabilir; dengeli tüketmek daha iyi."),
-            Item(CyclePhase.Follicular, ContentType.ExerciseDo, "Kardiyo",
-                "Artan enerjiyi değerlendirmek için uygun bir dönem."),
-            Item(CyclePhase.Follicular, ContentType.ExerciseDo, "Kuvvet antrenmanı",
-                "Toparlanma kapasitesi bu fazda genelde daha iyidir."),
-            Item(CyclePhase.Follicular, ContentType.ExerciseAvoid, "Uzun süreli hareketsizlik",
-                "Enerjinin yüksek olduğu bu dönemde hareket daha iyi hissettirebilir."),
-
-            // --- Ovulasyon ---
-            Item(CyclePhase.Ovulation, ContentType.FoodDo, "Renkli sebzeler",
-                "Antioksidan çeşitliliği sağlar."),
-            Item(CyclePhase.Ovulation, ContentType.FoodDo, "Kabak çekirdeği",
-                "Çinko kaynağı."),
-            Item(CyclePhase.Ovulation, ContentType.FoodAvoid, "Alkol",
-                "Uyku kalitesini ve ruh hâli dengesini bozabilir."),
-            Item(CyclePhase.Ovulation, ContentType.ExerciseDo, "Yüksek yoğunluklu antrenman",
-                "Birçok kişi bu günlerde kendini en güçlü hisseder."),
-            Item(CyclePhase.Ovulation, ContentType.ExerciseDo, "Grup sporları",
-                "Sosyal enerjinin yüksek olduğu bir dönem."),
-            Item(CyclePhase.Ovulation, ContentType.ExerciseAvoid, "Aşırı zorlanma",
-                "Kendini iyi hissetmek, sınırları zorlamak anlamına gelmiyor."),
-
-            // --- Luteal ---
-            Item(CyclePhase.Luteal, ContentType.FoodDo, "Tatlı patates",
-                "Kompleks karbonhidrat; kan şekerini daha dengeli tutmaya yardımcı olabilir."),
-            Item(CyclePhase.Luteal, ContentType.FoodDo, "Bitter çikolata",
-                "Magnezyum içerir; tatlı isteğine daha dengeli bir seçenek."),
-            Item(CyclePhase.Luteal, ContentType.FoodDo, "Mercimek",
-                "Lif ve bitkisel protein; tokluk hissini destekler."),
-            Item(CyclePhase.Luteal, ContentType.FoodAvoid, "Aşırı kafein",
-                "Kaygı ve göğüs hassasiyetini artırabilir."),
-            Item(CyclePhase.Luteal, ContentType.FoodAvoid, "Çok tuzlu atıştırmalıklar",
-                "Su tutulumunu ve şişkinliği artırabilir."),
-            Item(CyclePhase.Luteal, ContentType.ExerciseDo, "Pilates",
-                "Orta yoğunluk, güç ve esneklik dengesi sunar."),
-            Item(CyclePhase.Luteal, ContentType.ExerciseDo, "Hafif kardiyo",
-                "Endorfin salınımı ruh hâline iyi gelebilir."),
-            Item(CyclePhase.Luteal, ContentType.ExerciseAvoid, "Ağır kaldırma",
-                "Toparlanma bu fazda yavaşlayabilir; zorlanma riski artar."));
-
-        await db.SaveChangesAsync(cancellationToken);
-        logger.LogInformation("Faz içerikleri eklendi.");
-    }
-
-    private static ContentItem Item(
-        CyclePhase phase, ContentType type, string title, string body) =>
-        new() { Phase = phase, Type = type, Title = title, Body = body };
 }

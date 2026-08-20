@@ -18,8 +18,14 @@
     <Using Include="Xunit" />
   </ItemGroup>
 
+  <!--
+    Katalog seed verisi Infrastructure'da yaşıyor; öneri motorunun kabul
+    kriterleri ("15 dakikası olan kullanıcı boş liste görmez") ancak gerçek
+    katalogla sınanabildiği için testler bu projeye de bakar.
+  -->
   <ItemGroup>
     <ProjectReference Include="..\..\src\SereneCycle.Domain\SereneCycle.Domain.csproj" />
+    <ProjectReference Include="..\..\src\SereneCycle.Infrastructure\SereneCycle.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>

@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/app_typography.dart';
 
 /// Tasarımdaki döngü ilerleme halkası: arkada soluk bir tam çember,
 /// üstünde ilerlemeyi gösteren yay, ortada "7 / 28".
@@ -18,11 +19,14 @@ class CycleProgressRing extends StatelessWidget {
   final int cycleLength;
   final double progress;
 
+  /// Tasarımdaki halka boyu; kutu ve [CustomPaint] aynı ölçüyü paylaşır.
+  static const _diameter = 192.0;
+
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      width: 192,
-      height: 192,
+      width: _diameter,
+      height: _diameter,
       child: Stack(
         alignment: Alignment.center,
         children: [
@@ -32,7 +36,7 @@ class CycleProgressRing extends StatelessWidget {
             duration: const Duration(milliseconds: 900),
             curve: Curves.easeOutCubic,
             builder: (context, value, _) => CustomPaint(
-              size: const Size.square(192),
+              size: const Size.square(_diameter),
               painter: _RingPainter(value),
             ),
           ),
@@ -41,20 +45,13 @@ class CycleProgressRing extends StatelessWidget {
             children: [
               Text(
                 '$cycleDay. gün',
-                style: const TextStyle(
-                  fontSize: 28,
-                  height: 36 / 28,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.primary,
-                ),
+                style: context.text.displaySmall
+                    ?.copyWith(color: AppColors.primary),
               ),
               Text(
                 '$cycleLength günlük döngü',
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.onSurfaceVariant,
-                ),
+                style: context.text.labelLarge
+                    ?.copyWith(color: AppColors.onSurfaceVariant),
               ),
             ],
           ),

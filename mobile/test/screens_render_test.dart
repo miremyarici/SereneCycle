@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
 
 import 'package:serene_cycle/core/api/models.dart';
+import 'package:serene_cycle/core/api/serene_api.dart';
 import 'package:serene_cycle/core/providers/app_providers.dart';
 import 'package:serene_cycle/core/theme/app_theme.dart';
 import 'package:serene_cycle/core/theme/blood_colors.dart';
@@ -111,11 +112,26 @@ final _nutritionJson = <String, dynamic>{
   'phase': 'Follicular',
   'phaseName': 'Foliküler Faz',
   'recommended': [
-    {'title': 'Yumurta', 'body': 'Kaliteli protein.'},
-    {'title': 'Avokado', 'body': 'Sağlıklı yağlar.'},
+    {'id': 9, 'title': 'Yumurta', 'body': 'Kaliteli protein.'},
+    {'id': 10, 'title': 'Avokado', 'body': 'Sağlıklı yağlar.'},
   ],
   'limited': [
-    {'title': 'İşlenmiş şeker', 'body': 'Enerji dalgalanması yapabilir.'},
+    {'id': 12, 'title': 'İşlenmiş şeker', 'body': 'Enerji dalgalanması yapabilir.'},
+  ],
+  'disclaimer': 'Bu içerik bilgilendirme amaçlıdır, tıbbi tavsiye değildir.',
+};
+
+/// Geri bildirimden sonra sunucunun döndürdüğü liste: aynı fazın başka
+/// adayları. Katalog gösterilen sayıdan geniş olduğu için mümkün.
+final _nutritionAfterFeedbackJson = <String, dynamic>{
+  'phase': 'Follicular',
+  'phaseName': 'Foliküler Faz',
+  'recommended': [
+    {'id': 21, 'title': 'Kinoa', 'body': 'Glutensiz tam tahıl.'},
+    {'id': 22, 'title': 'Badem', 'body': 'Magnezyum kaynağı.'},
+  ],
+  'limited': [
+    {'id': 12, 'title': 'İşlenmiş şeker', 'body': 'Enerji dalgalanması yapabilir.'},
   ],
   'disclaimer': 'Bu içerik bilgilendirme amaçlıdır, tıbbi tavsiye değildir.',
 };
@@ -124,13 +140,49 @@ final _exerciseJson = <String, dynamic>{
   'phase': 'Follicular',
   'phaseName': 'Foliküler Faz',
   'recommended': [
-    {'title': 'Kardiyo', 'body': 'Artan enerjiyi değerlendirir.'},
+    {
+      'id': 13,
+      'title': 'Kardiyo',
+      'body': 'Artan enerjiyi değerlendirir.',
+      'durationMinutes': 30,
+    },
   ],
   'limited': [
-    {'title': 'Uzun süreli hareketsizlik', 'body': 'Hareket iyi gelir.'},
+    {'id': 15, 'title': 'Uzun süreli hareketsizlik', 'body': 'Hareket iyi gelir.'},
   ],
   'disclaimer': 'Bu içerik bilgilendirme amaçlıdır, tıbbi tavsiye değildir.',
 };
+
+/// Süre filtresi hiçbir adayı geçirmediğinde gelen yanıt.
+final _emptyExerciseJson = <String, dynamic>{
+  'phase': 'Follicular',
+  'phaseName': 'Foliküler Faz',
+  'recommended': <Map<String, dynamic>>[],
+  'limited': [
+    {'id': 15, 'title': 'Uzun süreli hareketsizlik', 'body': 'Hareket iyi gelir.'},
+  ],
+  'disclaimer': 'Bu içerik bilgilendirme amaçlıdır, tıbbi tavsiye değildir.',
+};
+
+/// Yalnızca geri bildirim ucunu taklit eder; testin dokunduğu tek çağrı o.
+/// Beklenmeyen bir çağrı sessizce geçmesin diye `noSuchMethod` hata atar.
+class _FeedbackOnlyApi implements SereneApi {
+  final List<int> feedbackForItems = [];
+
+  @override
+  Future<void> sendContentFeedback(
+    int contentItemId, {
+    bool? liked,
+    bool completed = false,
+  }) async {
+    feedbackForItems.add(contentItemId);
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => throw UnsupportedError(
+        'Test bu çağrıyı beklemiyor: ${invocation.memberName}',
+      );
+}
 
 final _userJson = <String, dynamic>{
   'id': '00000000-0000-0000-0000-000000000001',
@@ -320,6 +372,10 @@ void main() {
     expect(find.text('Sınırlı tutabileceklerin'), findsOneWidget);
     expect(find.text('İşlenmiş şeker'), findsOneWidget);
     expect(find.textContaining('tıbbi tavsiye değildir'), findsOneWidget);
+
+    // Geri bildirim yalnızca önerilerde sorulur, uyarı listesinde değil.
+    expect(find.byIcon(Icons.thumb_up_outlined), findsNWidgets(2));
+    expect(find.byIcon(Icons.thumb_down_outlined), findsNWidgets(2));
   });
 
   testWidgets('Hareket ekranı içeriği gösterir', (tester) async {
@@ -339,6 +395,17 @@ void main() {
 
     expect(find.text('Kardiyo'), findsOneWidget);
     expect(find.text('Şimdilik erteleyebileceklerin'), findsOneWidget);
+
+    // Süre kısıtı sert filtreye gider; ekranda seçilebilir olmalı.
+    expect(find.text('Ne kadar vaktin var?'), findsOneWidget);
+    expect(find.text('Fark etmez'), findsOneWidget);
+    expect(find.text('10 dk'), findsOneWidget);
+    expect(find.text('15 dk'), findsOneWidget);
+    expect(find.text('45 dk'), findsOneWidget);
+
+    // Süre rozeti ve "tamamladım" yalnızca hareket önerilerinde var.
+    expect(find.text('30 dk'), findsNWidgets(2));
+    expect(find.text('Tamamladım'), findsOneWidget);
   });
 
   testWidgets('Profil ekranı kullanıcı bilgilerini gösterir', (tester) async {
@@ -542,5 +609,81 @@ void main() {
 
     expect(find.textContaining('Sunucuya ulaşılamadı'), findsOneWidget);
     expect(find.text('Tekrar dene'), findsOneWidget);
+  });
+
+  testWidgets('Beğenmedim işareti listeyi anında yeniden yükler', (
+    tester,
+  ) async {
+    _useTallScreen(tester);
+
+    final api = _FeedbackOnlyApi();
+    var loadCount = 0;
+
+    await _pump(
+      tester,
+      ProviderScope(
+        overrides: [
+          sereneApiProvider.overrideWithValue(api),
+          nutritionProvider.overrideWith((ref) async {
+            loadCount++;
+            return PhaseContent.fromJson(
+              loadCount == 1 ? _nutritionJson : _nutritionAfterFeedbackJson,
+            );
+          }),
+        ],
+        child: _app(const NutritionScreen()),
+      ),
+    );
+
+    expect(loadCount, 1);
+    expect(find.text('Yumurta'), findsOneWidget);
+
+    await tester.tap(find.byIcon(Icons.thumb_down_outlined).first);
+    await tester.pumpAndSettle();
+
+    // Sinyal sunucuya gitti...
+    expect(api.feedbackForItems, [9]);
+
+    // ...ve liste yeniden istendi: kullanıcı düğmenin bir şeyi
+    // değiştirdiğini görüyor.
+    expect(loadCount, 2);
+    expect(find.text('Yumurta'), findsNothing);
+    expect(find.text('Kinoa'), findsOneWidget);
+  });
+
+  testWidgets('Süre filtresi liste yenilenirken ekranda kalır', (tester) async {
+    _useTallScreen(tester);
+
+    await _pump(
+      tester,
+      ProviderScope(
+        overrides: [
+          exerciseProvider.overrideWith((ref) async {
+            final minutes = ref.watch(exerciseMinutesProvider);
+            return PhaseContent.fromJson(
+              minutes == null ? _exerciseJson : _emptyExerciseJson,
+            );
+          }),
+        ],
+        child: _app(const ExerciseScreen()),
+      ),
+    );
+
+    expect(find.text('Kardiyo'), findsOneWidget);
+
+    await tester.tap(find.widgetWithText(ChoiceChip, '15 dk'));
+    await tester.pumpAndSettle();
+
+    // Çipler listenin dışında olduğu için yeniden yüklemeden sağ çıkar.
+    expect(find.text('Ne kadar vaktin var?'), findsOneWidget);
+    expect(
+      tester
+          .widget<ChoiceChip>(find.widgetWithText(ChoiceChip, '15 dk'))
+          .selected,
+      isTrue,
+    );
+
+    // Boş liste artık "içerik eklenmedi" demiyor: sebebi süre kısıtı.
+    expect(find.textContaining('15 dakikaya sığan'), findsOneWidget);
   });
 }

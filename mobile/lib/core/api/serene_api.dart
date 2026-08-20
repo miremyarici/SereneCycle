@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
+import '../utils/date_format.dart';
 import 'api_client.dart';
 import 'models.dart';
 
@@ -71,8 +72,7 @@ class SereneApi {
       'name': ?name,
       'avgCycleLength': ?avgCycleLength,
       'avgPeriodLength': ?avgPeriodLength,
-      if (lastPeriodStart != null)
-        'lastPeriodStart': _formatDate(lastPeriodStart),
+      if (lastPeriodStart != null) 'lastPeriodStart': toIsoDate(lastPeriodStart),
     });
     return UserSummary.fromJson(json!);
   }
@@ -146,7 +146,7 @@ class SereneApi {
   }
 
   Future<DailyLogEntry> getDailyLog(DateTime date) async {
-    final json = await _client.get('/logs/${_formatDate(date)}');
+    final json = await _client.get('/logs/${toIsoDate(date)}');
     return DailyLogEntry.fromJson(json!);
   }
 
@@ -159,7 +159,7 @@ class SereneApi {
     Set<int> symptomIds = const {},
     String? note,
   }) async {
-    final json = await _client.put('/logs/${_formatDate(date)}', data: {
+    final json = await _client.put('/logs/${toIsoDate(date)}', data: {
       'hasBleeding': hasBleeding,
       'hasSpotting': hasSpotting,
       'flow': flow?.wireValue,
@@ -175,14 +175,38 @@ class SereneApi {
     return PhaseContent.fromJson(json!);
   }
 
-  Future<PhaseContent> getExercise() async {
-    final json = await _client.get('/content/exercise');
+  /// [minutes] verilirse daha uzun süren hareketler hiç önerilmez —
+  /// süre öğrenilen bir tercih değil, bilinen bir kısıt.
+  Future<PhaseContent> getExercise({int? minutes}) async {
+    final json = await _client.get(
+      '/content/exercise',
+      queryParameters: {'minutes': ?minutes},
+    );
     return PhaseContent.fromJson(json!);
   }
 
-  /// Backend DateOnly bekliyor: yyyy-MM-dd.
-  static String _formatDate(DateTime date) =>
-      '${date.year.toString().padLeft(4, '0')}-'
-      '${date.month.toString().padLeft(2, '0')}-'
-      '${date.day.toString().padLeft(2, '0')}';
+  /// Tek bir öneriye verilen tepki. Sunucu bunu öğenin bütün zevk
+  /// etiketlerine dağıtır.
+  Future<void> sendContentFeedback(
+    int contentItemId, {
+    bool? liked,
+    bool completed = false,
+  }) =>
+      _client.post(
+        '/content/$contentItemId/feedback',
+        data: {'liked': liked, 'completed': completed},
+      );
+
+  /// Onboarding anketi: kısıtlar sert filtreye, zevk cevapları öğrenme
+  /// prior'ına yazılır.
+  Future<void> saveTastePreferences({
+    required Set<TasteTagOption> liked,
+    required Set<TasteTagOption> disliked,
+    required Set<AvoidFlagOption> avoid,
+  }) =>
+      _client.put('/content/preferences', data: {
+        'likedTags': [for (final tag in liked) tag.wireValue],
+        'dislikedTags': [for (final tag in disliked) tag.wireValue],
+        'avoidFlags': [for (final flag in avoid) flag.wireValue],
+      });
 }

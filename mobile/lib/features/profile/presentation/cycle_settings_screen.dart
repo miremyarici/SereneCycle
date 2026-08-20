@@ -7,9 +7,15 @@ import '../../../core/api/api_client.dart';
 import '../../../core/api/models.dart';
 import '../../../core/providers/app_providers.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_typography.dart';
+import '../../../core/utils/period_start_picker.dart';
+import '../../../core/widgets/app_snack_bar.dart';
 import '../../../core/widgets/async_view.dart';
+import '../../../core/widgets/circle_icon.dart';
 import '../../../core/widgets/pill_button.dart';
+import '../../../core/widgets/section_title.dart';
 import '../../../core/widgets/soft_shadow_card.dart';
+import '../../../core/widgets/stepper_button.dart';
 
 /// Profil → "Adet döngünü düzenle". Faz tahminini besleyen üç değer burada
 /// güncellenir: ortalama döngü uzunluğu, adet süresi ve son adet başlangıcı.
@@ -26,17 +32,7 @@ class CycleSettingsScreen extends ConsumerWidget {
     final phase = ref.watch(phaseTodayProvider);
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text(
-          'Adet Döngüsü',
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.w600,
-            color: AppColors.primary,
-          ),
-        ),
-        centerTitle: true,
-      ),
+      appBar: AppBar(title: const Text('Adet Döngüsü'), centerTitle: true),
       body: phase.isLoading
           ? const Center(
               child: CircularProgressIndicator(color: AppColors.primary),
@@ -83,20 +79,8 @@ class _CycleFormState extends ConsumerState<_CycleForm> {
       _cycleLengthChanged || _periodLengthChanged || _periodStartChanged;
 
   Future<void> _pickPeriodStart() async {
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _periodStart ?? today,
-      // Gelecek tarih backend'de reddediliyor; bir yıldan eskisi de
-      // tahmin için anlamlı değil.
-      firstDate: DateTime(today.year - 1, today.month, today.day),
-      lastDate: today,
-      helpText: 'Son adet başlangıcı',
-      confirmText: 'Seç',
-      cancelText: 'Vazgeç',
-    );
+    final picked =
+        await pickPeriodStartDate(context, initialDate: _periodStart);
 
     if (picked != null) {
       setState(() => _periodStart = picked);
@@ -123,19 +107,10 @@ class _CycleFormState extends ConsumerState<_CycleForm> {
 
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Döngü ayarların güncellendi.')),
-      );
+      context.showMessage('Döngü ayarların güncellendi.');
       context.pop();
     } on ApiException catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(e.message),
-            backgroundColor: AppColors.error,
-          ),
-        );
-      }
+      if (mounted) context.showError(e.message);
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
@@ -143,8 +118,6 @@ class _CycleFormState extends ConsumerState<_CycleForm> {
 
   @override
   Widget build(BuildContext context) {
-    final dateFormat = DateFormat('d MMMM yyyy', 'tr');
-
     return ListView(
       padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
       children: [
@@ -152,7 +125,7 @@ class _CycleFormState extends ConsumerState<_CycleForm> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const _CardTitle('DÖNGÜ UZUNLUĞU'),
+              const SectionTitle('DÖNGÜ UZUNLUĞU'),
               const SizedBox(height: 16),
               _StepperRow(
                 icon: Icons.calendar_month_outlined,
@@ -181,46 +154,18 @@ class _CycleFormState extends ConsumerState<_CycleForm> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const _CardTitle('SON ADET BAŞLANGICI'),
+              const SectionTitle('SON ADET BAŞLANGICI'),
               const SizedBox(height: 16),
-              InkWell(
+              _PeriodStartRow(
+                value: _periodStart,
                 onTap: _isSaving ? null : _pickPeriodStart,
-                borderRadius: BorderRadius.circular(12),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 4),
-                  child: Row(
-                    children: [
-                      const _RowIcon(Icons.edit_calendar_outlined),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          _periodStart == null
-                              ? 'Tarih seç'
-                              : dateFormat.format(_periodStart!),
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w500,
-                            color: AppColors.onSurface,
-                          ),
-                        ),
-                      ),
-                      const Icon(
-                        Icons.chevron_right,
-                        color: AppColors.outline,
-                      ),
-                    ],
-                  ),
-                ),
               ),
               const SizedBox(height: 12),
-              const Text(
+              Text(
                 'Tarihi değiştirmek yeni bir döngü kaydı başlatır ve '
                 'tahminler buna göre yeniden hesaplanır.',
-                style: TextStyle(
-                  fontSize: 13,
-                  height: 18 / 13,
-                  color: AppColors.onSurfaceVariant,
-                ),
+                style: context.text.bodyMedium
+                    ?.copyWith(color: AppColors.onSurfaceVariant),
               ),
             ],
           ),
@@ -237,6 +182,45 @@ class _CycleFormState extends ConsumerState<_CycleForm> {
   }
 }
 
+/// Son adet başlangıcını açan satır.
+class _PeriodStartRow extends StatelessWidget {
+  const _PeriodStartRow({required this.value, required this.onTap});
+
+  final DateTime? value;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final date = value;
+
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: Row(
+          children: [
+            const CircleIcon(Icons.edit_calendar_outlined),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                date == null
+                    ? 'Tarih seç'
+                    : DateFormat('d MMMM yyyy', 'tr').format(date),
+                style: context.text.bodyLarge?.copyWith(
+                  fontWeight: FontWeight.w500,
+                  color: AppColors.onSurface,
+                ),
+              ),
+            ),
+            const Icon(Icons.chevron_right, color: AppColors.outline),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _StepperRow extends StatelessWidget {
   const _StepperRow({
     required this.icon,
@@ -247,6 +231,8 @@ class _StepperRow extends StatelessWidget {
     required this.max,
     required this.onChanged,
   });
+
+  static const _valueWidth = 64.0;
 
   final IconData icon;
   final String label;
@@ -259,7 +245,7 @@ class _StepperRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Row(
         children: [
-          _RowIcon(icon),
+          CircleIcon(icon),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -267,103 +253,38 @@ class _StepperRow extends StatelessWidget {
               children: [
                 Text(
                   label,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    color: AppColors.onSurface,
-                  ),
+                  style: context.text.bodyLarge
+                      ?.copyWith(color: AppColors.onSurface),
                 ),
                 Text(
                   helperText,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: AppColors.onSurfaceVariant,
-                  ),
+                  style: context.text.bodySmall
+                      ?.copyWith(color: AppColors.onSurfaceVariant),
                 ),
               ],
             ),
           ),
-          _StepButton(
+          StepperButton(
             icon: Icons.remove,
             tooltip: 'Azalt',
             onPressed: value > min ? () => onChanged(value - 1) : null,
           ),
           SizedBox(
-            width: 64,
+            width: _valueWidth,
             child: Text(
               '$value gün',
               textAlign: TextAlign.center,
-              style: const TextStyle(
-                fontSize: 16,
+              style: context.text.bodyLarge?.copyWith(
                 fontWeight: FontWeight.w600,
                 color: AppColors.primary,
               ),
             ),
           ),
-          _StepButton(
+          StepperButton(
             icon: Icons.add,
             tooltip: 'Artır',
             onPressed: value < max ? () => onChanged(value + 1) : null,
           ),
         ],
-      );
-}
-
-class _StepButton extends StatelessWidget {
-  const _StepButton({
-    required this.icon,
-    required this.tooltip,
-    required this.onPressed,
-  });
-
-  final IconData icon;
-  final String tooltip;
-  final VoidCallback? onPressed;
-
-  @override
-  Widget build(BuildContext context) => IconButton(
-        onPressed: onPressed,
-        tooltip: tooltip,
-        visualDensity: VisualDensity.compact,
-        icon: Icon(icon, size: 20),
-        style: IconButton.styleFrom(
-          backgroundColor: AppColors.surfaceContainer,
-          foregroundColor: AppColors.primary,
-          disabledForegroundColor: AppColors.outline,
-          shape: const CircleBorder(),
-        ),
-      );
-}
-
-class _RowIcon extends StatelessWidget {
-  const _RowIcon(this.icon);
-
-  final IconData icon;
-
-  @override
-  Widget build(BuildContext context) => Container(
-        width: 40,
-        height: 40,
-        decoration: const BoxDecoration(
-          color: AppColors.surfaceContainer,
-          shape: BoxShape.circle,
-        ),
-        child: Icon(icon, size: 20, color: AppColors.secondary),
-      );
-}
-
-class _CardTitle extends StatelessWidget {
-  const _CardTitle(this.text);
-
-  final String text;
-
-  @override
-  Widget build(BuildContext context) => Text(
-        text,
-        style: const TextStyle(
-          fontSize: 14,
-          fontWeight: FontWeight.w600,
-          letterSpacing: 1.2,
-          color: AppColors.secondary,
-        ),
       );
 }

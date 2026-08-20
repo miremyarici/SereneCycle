@@ -1,6 +1,7 @@
-/// Uygulama genelindeki route yolları. Faz 0'da sadece 4 sekme kullanımda;
-/// onboarding/auth yolları burada tanımlı olarak duruyor ama henüz bir
-/// [GoRoute]'a bağlanmadı — ilgili ekranlar Faz 1/Faz 3'te yazılınca eklenir.
+import '../utils/date_format.dart';
+
+/// Uygulama genelindeki route yolları. Auth ve onboarding akışı alt menüsüz,
+/// içerik ekranları 4 sekmeli shell'in içinde tanımlı.
 abstract class RoutePaths {
   static const login = '/login';
   static const signUp = '/sign-up';
@@ -30,8 +31,5 @@ abstract class RoutePaths {
   static const periodLogSegment = 'log/:date';
 
   /// [date] yyyy-MM-dd biçiminde.
-  static String periodLog(DateTime date) =>
-      '$home/log/${date.year.toString().padLeft(4, '0')}-'
-      '${date.month.toString().padLeft(2, '0')}-'
-      '${date.day.toString().padLeft(2, '0')}';
+  static String periodLog(DateTime date) => '$home/log/${toIsoDate(date)}';
 }

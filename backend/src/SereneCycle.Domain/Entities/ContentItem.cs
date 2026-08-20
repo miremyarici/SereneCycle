@@ -1,3 +1,4 @@
+using SereneCycle.Domain.Content;
 using SereneCycle.Domain.Cycles;
 
 namespace SereneCycle.Domain.Entities;
@@ -19,6 +20,25 @@ public class ContentItem
 
     /// <summary>Kısa gerekçe — neden bu öneri verildiği.</summary>
     public required string Body { get; set; }
+
+    /// <summary>
+    /// Öğenin zevk etiketleri (<see cref="TasteTag"/> maskesi). Öneri
+    /// motorunun skoru bu etiketlerin ortalamasıdır.
+    /// </summary>
+    public long TagMask { get; set; }
+
+    /// <summary>
+    /// Öğeyi eleyecek kullanıcı bayrakları (<see cref="ContraTag"/>
+    /// maskesi). Kullanıcının <c>AvoidMask</c>'i ile kesişiyorsa öğe
+    /// aday kümesine hiç girmez.
+    /// </summary>
+    public long ContraMask { get; set; }
+
+    /// <summary>
+    /// Yaklaşık süre — yalnızca egzersiz önerilerinde dolu. Süresi
+    /// bilinmeyen öğe süre filtresine takılmaz.
+    /// </summary>
+    public int? DurationMinutes { get; set; }
 }
 
 public enum ContentType

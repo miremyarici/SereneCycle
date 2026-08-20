@@ -9,6 +9,7 @@ using SereneCycle.Application.Logs;
 using SereneCycle.Application.Phases;
 using SereneCycle.Application.Profiles;
 using SereneCycle.Application.Risk;
+using SereneCycle.Infrastructure.Content;
 using SereneCycle.Infrastructure.Email;
 using SereneCycle.Infrastructure.Identity;
 using SereneCycle.Infrastructure.Options;
@@ -54,7 +55,11 @@ public static class DependencyInjection
         services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<IProfileService, ProfileService>();
         services.AddScoped<IPhaseService, PhaseService>();
+        // Katalog seed verisidir ve çalışma anında değişmez: süreç başına
+        // tek kopya yeter, üstelik her öneri isteğinden bir sorgu düşer.
+        services.AddSingleton<ContentCatalog>();
         services.AddScoped<IContentService, ContentService>();
+        services.AddScoped<ITasteProfileService, TasteProfileService>();
         services.AddScoped<ILogService, LogService>();
         services.AddScoped<IRiskService, RiskService>();
         services.AddScoped<CycleRegistrar>();

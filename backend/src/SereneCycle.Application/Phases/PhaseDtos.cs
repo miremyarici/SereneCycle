@@ -66,6 +66,16 @@ public interface IPhaseService
         CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Yalnızca bugünkü faz. <see cref="GetTodayAsync"/> ile aynı kuralı
+    /// uygular ama takvim şeridini ve risk kartını hiç kurmaz: içerik uçları
+    /// yalnızca fazı sorduğu için ana sayfanın bütün yükünü ödememeli.
+    /// Hiç döngü kaydı yoksa <see cref="ErrorCode.NotFound"/> döner.
+    /// </summary>
+    Task<Result<CyclePhase>> GetCurrentPhaseAsync(
+        Guid userId,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Verilen ayın tüm günleri. Her gün için o tarihte geçerli olan döngüye
     /// göre faz, ve kullanıcının kaydından gelen kanama/lekelenme işaretleri.
     /// </summary>

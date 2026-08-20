@@ -7,9 +7,11 @@ import '../../../core/api/models.dart';
 import '../../../core/providers/app_providers.dart';
 import '../../../core/router/route_paths.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_typography.dart';
 import '../../../core/widgets/async_view.dart';
 import '../../../core/widgets/soft_shadow_card.dart';
 import 'widgets/cycle_day_marker.dart';
+import 'widgets/weekday_labels.dart';
 
 /// Ana sayfadaki takvim ikonundan açılır: kullanıcı tüm tarihleri görür ve
 /// bir güne dokununca o günün adet kaydı ekranına gider.
@@ -21,6 +23,10 @@ class CalendarScreen extends ConsumerStatefulWidget {
 }
 
 class _CalendarScreenState extends ConsumerState<CalendarScreen> {
+  /// Ay değişirken kart boyu zıplamasın diye sabit yükseklik: 6 satırlık
+  /// en uzun aya göre.
+  static const _gridHeight = 380.0;
+
   late DateTime _month = _firstDayOfMonth(DateTime.now());
 
   static DateTime _firstDayOfMonth(DateTime date) =>
@@ -35,17 +41,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     final calendar = ref.watch(calendarMonthProvider(_month));
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text(
-          'Takvim',
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.w600,
-            color: AppColors.primary,
-          ),
-        ),
-        centerTitle: true,
-      ),
+      appBar: AppBar(title: const Text('Takvim'), centerTitle: true),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(24, 8, 24, 32),
         children: [
@@ -57,9 +53,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
           const SizedBox(height: 16),
           SoftShadowCard(
             child: SizedBox(
-              // Ay değişirken kart boyu zıplamasın diye sabit yükseklik:
-              // 6 satırlık en uzun aya göre.
-              height: 380,
+              height: _gridHeight,
               child: AsyncView(
                 value: calendar,
                 onRetry: () => ref.invalidate(calendarMonthProvider(_month)),
@@ -102,11 +96,7 @@ class _MonthHeader extends StatelessWidget {
           ),
           Text(
             DateFormat('MMMM yyyy', 'tr').format(month),
-            style: const TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w600,
-              color: AppColors.primary,
-            ),
+            style: context.text.titleLarge?.copyWith(color: AppColors.primary),
           ),
           IconButton(
             onPressed: onNext,
@@ -124,13 +114,12 @@ class _MonthGrid extends StatelessWidget {
     required this.onDayTap,
   });
 
+  static const _columnCount = 7;
+  static const _cellAspectRatio = 0.72;
+
   final DateTime month;
   final List<CalendarDay> days;
   final void Function(CalendarDay day) onDayTap;
-
-  static const _weekdayLabels = [
-    'Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz',
-  ];
 
   @override
   Widget build(BuildContext context) {
@@ -142,29 +131,26 @@ class _MonthGrid extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Row(
-          children: _weekdayLabels
-              .map((label) => Expanded(
-                    child: Text(
-                      label,
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
-                        color: AppColors.onSurfaceVariant,
-                      ),
-                    ),
-                  ))
-              .toList(),
+          children: [
+            for (final label in weekdayLabels)
+              Expanded(
+                child: Text(
+                  label,
+                  textAlign: TextAlign.center,
+                  style: context.text.labelMedium
+                      ?.copyWith(color: AppColors.onSurfaceVariant),
+                ),
+              ),
+          ],
         ),
         const SizedBox(height: 8),
         Expanded(
           child: GridView.builder(
             padding: EdgeInsets.zero,
             physics: const NeverScrollableScrollPhysics(),
-            gridDelegate:
-                const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 7,
-              childAspectRatio: 0.72,
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: _columnCount,
+              childAspectRatio: _cellAspectRatio,
             ),
             itemCount: leadingBlanks + days.length,
             itemBuilder: (context, index) {
@@ -183,6 +169,8 @@ class _MonthGrid extends StatelessWidget {
 class _DayCell extends StatelessWidget {
   const _DayCell({required this.day, required this.onTap});
 
+  static const _circleSize = 32.0;
+
   final CalendarDay day;
   final VoidCallback onTap;
 
@@ -194,8 +182,8 @@ class _DayCell extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              width: 32,
-              height: 32,
+              width: _circleSize,
+              height: _circleSize,
               alignment: Alignment.center,
               decoration: BoxDecoration(
                 color: day.isToday ? AppColors.primary : Colors.transparent,
@@ -203,13 +191,10 @@ class _DayCell extends StatelessWidget {
               ),
               child: Text(
                 '${day.date.day}',
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight:
-                      day.isToday ? FontWeight.w600 : FontWeight.w400,
-                  color: day.isToday
-                      ? AppColors.onPrimary
-                      : AppColors.onSurface,
+                style: context.text.bodyMedium?.copyWith(
+                  fontWeight: day.isToday ? FontWeight.w600 : null,
+                  color:
+                      day.isToday ? AppColors.onPrimary : AppColors.onSurface,
                 ),
               ),
             ),
@@ -271,10 +256,8 @@ class _LegendRow extends StatelessWidget {
           Expanded(
             child: Text(
               label,
-              style: const TextStyle(
-                fontSize: 13,
-                color: AppColors.onSurfaceVariant,
-              ),
+              style: context.text.bodyMedium
+                  ?.copyWith(color: AppColors.onSurfaceVariant),
             ),
           ),
         ],

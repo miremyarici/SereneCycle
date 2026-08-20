@@ -6,11 +6,14 @@ import 'package:go_router/go_router.dart';
 import '../../../core/api/api_client.dart';
 import '../../../core/providers/app_providers.dart';
 import '../../../core/router/route_paths.dart';
-import '../../../core/theme/app_colors.dart';
 import '../../../core/validation/password_validator.dart';
+import '../../../core/widgets/app_snack_bar.dart';
 import '../../../core/widgets/pill_button.dart';
 import '../../../core/widgets/soft_shadow_card.dart';
 import '../../../core/widgets/underlined_text_field.dart';
+import 'widgets/auth_header.dart';
+import 'widgets/auth_page.dart';
+import 'widgets/password_field.dart';
 
 class NewPasswordScreen extends ConsumerStatefulWidget {
   const NewPasswordScreen({required this.email, super.key});
@@ -22,12 +25,12 @@ class NewPasswordScreen extends ConsumerStatefulWidget {
 }
 
 class _NewPasswordScreenState extends ConsumerState<NewPasswordScreen> {
+  static const _codeLength = 6;
+
   final _formKey = GlobalKey<FormState>();
   final _codeController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmController = TextEditingController();
-  bool _obscurePassword = true;
-  bool _obscureConfirm = true;
   bool _isLoading = false;
 
   @override
@@ -42,14 +45,8 @@ class _NewPasswordScreenState extends ConsumerState<NewPasswordScreen> {
     if (!_formKey.currentState!.validate()) return;
 
     if (widget.email.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'E-posta bulunamadı, lütfen "Şifremi unuttum" akışını '
-            'baştan başlat.',
-          ),
-          backgroundColor: AppColors.error,
-        ),
+      context.showError(
+        'E-posta bulunamadı, lütfen "Şifremi unuttum" akışını baştan başlat.',
       );
       return;
     }
@@ -64,22 +61,11 @@ class _NewPasswordScreenState extends ConsumerState<NewPasswordScreen> {
           );
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Şifren güncellendi, giriş yapabilirsin.'),
-          ),
-        );
+        context.showMessage('Şifren güncellendi, giriş yapabilirsin.');
         context.go(RoutePaths.login);
       }
     } on ApiException catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(e.message),
-            backgroundColor: AppColors.error,
-          ),
-        );
-      }
+      if (mounted) context.showError(e.message);
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -87,122 +73,61 @@ class _NewPasswordScreenState extends ConsumerState<NewPasswordScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => context.pop(),
-        ),
-      ),
-      body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 448),
-              child: SoftShadowCard(
-                padding: const EdgeInsets.all(24),
-                child: Form(
-                  key: _formKey,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      const Text(
-                        'Yeni şifre belirle',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 24,
-                          height: 32 / 24,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.onSurface,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      const Text(
-                        'Hesabın için güçlü, daha önce kullanmadığın bir '
-                        'şifre seç.',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 16,
-                          height: 24 / 16,
-                          color: AppColors.onSurfaceVariant,
-                        ),
-                      ),
-                      const SizedBox(height: 32),
-                      UnderlinedTextField(
-                        label: 'Doğrulama Kodu',
-                        controller: _codeController,
-                        hintText: '6 haneli kod',
-                        keyboardType: TextInputType.number,
-                        textInputAction: TextInputAction.next,
-                        inputFormatters: [
-                          FilteringTextInputFormatter.digitsOnly,
-                          LengthLimitingTextInputFormatter(6),
-                        ],
-                        validator: (value) {
-                          if (value == null || value.length != 6) {
-                            return '6 haneli kodu gir';
-                          }
-                          return null;
-                        },
-                      ),
-                      const SizedBox(height: 20),
-                      UnderlinedTextField(
-                        label: 'Yeni Şifre',
-                        controller: _passwordController,
-                        hintText: '••••••••',
-                        obscureText: _obscurePassword,
-                        textInputAction: TextInputAction.next,
-                        autofillHints: const [AutofillHints.newPassword],
-                        suffixIcon: IconButton(
-                          icon: Icon(
-                            _obscurePassword
-                                ? Icons.visibility_off_outlined
-                                : Icons.visibility_outlined,
-                            size: 20,
-                            color: AppColors.outline,
-                          ),
-                          onPressed: () => setState(
-                            () => _obscurePassword = !_obscurePassword,
-                          ),
-                        ),
-                        validator: validatePassword,
-                      ),
-                      const SizedBox(height: 20),
-                      UnderlinedTextField(
-                        label: 'Şifreyi Tekrar Gir',
-                        controller: _confirmController,
-                        hintText: '••••••••',
-                        obscureText: _obscureConfirm,
-                        textInputAction: TextInputAction.done,
-                        suffixIcon: IconButton(
-                          icon: Icon(
-                            _obscureConfirm
-                                ? Icons.visibility_off_outlined
-                                : Icons.visibility_outlined,
-                            size: 20,
-                            color: AppColors.outline,
-                          ),
-                          onPressed: () => setState(
-                            () => _obscureConfirm = !_obscureConfirm,
-                          ),
-                        ),
-                        validator: (value) => value != _passwordController.text
-                            ? 'Şifreler eşleşmiyor'
-                            : null,
-                      ),
-                      const SizedBox(height: 32),
-                      PillButton(
-                        label: 'Şifreyi Sıfırla',
-                        filled: true,
-                        onPressed: _submit,
-                        isLoading: _isLoading,
-                      ),
-                    ],
-                  ),
-                ),
+    return AuthPage(
+      hasBackButton: true,
+      child: SoftShadowCard(
+        padding: const EdgeInsets.all(24),
+        child: Form(
+          key: _formKey,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const AuthHeader(
+                title: 'Yeni şifre belirle',
+                subtitle: 'Hesabın için güçlü, daha önce kullanmadığın bir '
+                    'şifre seç.',
               ),
-            ),
+              const SizedBox(height: 32),
+              UnderlinedTextField(
+                label: 'Doğrulama Kodu',
+                controller: _codeController,
+                hintText: '$_codeLength haneli kod',
+                keyboardType: TextInputType.number,
+                textInputAction: TextInputAction.next,
+                inputFormatters: [
+                  FilteringTextInputFormatter.digitsOnly,
+                  LengthLimitingTextInputFormatter(_codeLength),
+                ],
+                validator: (value) => (value == null ||
+                        value.length != _codeLength)
+                    ? '$_codeLength haneli kodu gir'
+                    : null,
+              ),
+              const SizedBox(height: 20),
+              PasswordField(
+                label: 'Yeni Şifre',
+                controller: _passwordController,
+                textInputAction: TextInputAction.next,
+                autofillHints: const [AutofillHints.newPassword],
+                validator: validatePassword,
+              ),
+              const SizedBox(height: 20),
+              PasswordField(
+                label: 'Şifreyi Tekrar Gir',
+                controller: _confirmController,
+                textInputAction: TextInputAction.done,
+                validator: (value) => value != _passwordController.text
+                    ? 'Şifreler eşleşmiyor'
+                    : null,
+              ),
+              const SizedBox(height: 32),
+              PillButton(
+                label: 'Şifreyi Sıfırla',
+                filled: true,
+                onPressed: _submit,
+                isLoading: _isLoading,
+              ),
+            ],
           ),
         ),
       ),

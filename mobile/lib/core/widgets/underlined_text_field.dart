@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../theme/app_colors.dart';
+import '../theme/app_typography.dart';
 
 /// Auth ekranlarındaki minimal input: üstte küçük etiket,
 /// altta tek çizgi (tasarımdaki `border-b` deseni).
@@ -31,6 +32,8 @@ class UnderlinedTextField extends StatelessWidget {
   final Iterable<String>? autofillHints;
   final List<TextInputFormatter>? inputFormatters;
 
+  static const _hintOpacity = 0.5;
+
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -40,12 +43,8 @@ class UnderlinedTextField extends StatelessWidget {
           padding: const EdgeInsets.only(left: 4, bottom: 4),
           child: Text(
             label,
-            style: const TextStyle(
-              fontSize: 12,
-              height: 16 / 12,
-              fontWeight: FontWeight.w500,
-              color: AppColors.onSurfaceVariant,
-            ),
+            style: context.text.labelMedium
+                ?.copyWith(color: AppColors.onSurfaceVariant),
           ),
         ),
         TextFormField(
@@ -56,16 +55,14 @@ class UnderlinedTextField extends StatelessWidget {
           textInputAction: textInputAction,
           autofillHints: autofillHints,
           inputFormatters: inputFormatters,
-          style: const TextStyle(
-            fontSize: 16,
-            height: 24 / 16,
+          style: context.text.bodyLarge?.copyWith(
             color: AppColors.onSurface,
           ),
           decoration: InputDecoration(
             hintText: hintText,
-            hintStyle: TextStyle(
-              fontSize: 16,
-              color: AppColors.onSurfaceVariant.withValues(alpha: 0.5),
+            hintStyle: context.text.bodyLarge?.copyWith(
+              color: AppColors.onSurfaceVariant
+                  .withValues(alpha: _hintOpacity),
             ),
             suffixIcon: suffixIcon,
             isDense: true,

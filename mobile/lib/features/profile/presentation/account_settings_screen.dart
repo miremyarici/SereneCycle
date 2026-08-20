@@ -1,5 +1,3 @@
-import 'dart:typed_data';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
@@ -8,8 +6,14 @@ import '../../../core/api/api_client.dart';
 import '../../../core/api/models.dart';
 import '../../../core/providers/app_providers.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_typography.dart';
+import '../../../core/validation/email_validator.dart';
 import '../../../core/validation/password_validator.dart';
+import '../../../core/widgets/app_snack_bar.dart';
 import '../../../core/widgets/async_view.dart';
+import '../../../core/widgets/avatar_circle.dart';
+import '../../../core/widgets/circle_icon.dart';
+import '../../../core/widgets/section_title.dart';
 import '../../../core/widgets/soft_shadow_card.dart';
 import '../../../core/widgets/underlined_text_field.dart';
 
@@ -23,17 +27,7 @@ class AccountSettingsScreen extends ConsumerWidget {
     final profile = ref.watch(profileProvider);
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text(
-          'Profil Bilgileri',
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.w600,
-            color: AppColors.primary,
-          ),
-        ),
-        centerTitle: true,
-      ),
+      appBar: AppBar(title: const Text('Profil Bilgileri'), centerTitle: true),
       body: AsyncView(
         value: profile,
         onRetry: () => ref.invalidate(profileProvider),
@@ -42,50 +36,56 @@ class AccountSettingsScreen extends ConsumerWidget {
           children: [
             _AvatarSection(user: user),
             const SizedBox(height: 24),
-            SoftShadowCard(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const _CardTitle('HESAP'),
-                  const SizedBox(height: 8),
-                  _EditRow(
-                    icon: Icons.person_outline,
-                    label: 'İsim',
-                    value: user.name,
-                    onTap: () => _showNameDialog(context, ref, user),
-                  ),
-                  const Divider(height: 24, color: AppColors.outlineVariant),
-                  _EditRow(
-                    icon: Icons.mail_outline,
-                    label: 'E-posta',
-                    value: user.email,
-                    onTap: () => _showEmailDialog(context, ref),
-                  ),
-                  const Divider(height: 24, color: AppColors.outlineVariant),
-                  _EditRow(
-                    icon: Icons.lock_outline,
-                    label: 'Parola',
-                    value: '••••••••',
-                    onTap: () => _showPasswordDialog(context, ref),
-                  ),
-                ],
-              ),
-            ),
+            _AccountCard(user: user),
             const SizedBox(height: 16),
-            const Text(
+            Text(
               'E-posta adresini değiştirdiğinde yeni adresine bir doğrulama '
               'kodu gönderilir; kod girilene kadar adresin değişmez.',
-              style: TextStyle(
-                fontSize: 13,
-                height: 18 / 13,
-                color: AppColors.onSurfaceVariant,
-              ),
+              style: context.text.bodyMedium
+                  ?.copyWith(color: AppColors.onSurfaceVariant),
             ),
           ],
         ),
       ),
     );
   }
+}
+
+class _AccountCard extends ConsumerWidget {
+  const _AccountCard({required this.user});
+
+  final UserSummary user;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) => SoftShadowCard(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SectionTitle('HESAP'),
+            const SizedBox(height: 8),
+            _EditRow(
+              icon: Icons.person_outline,
+              label: 'İsim',
+              value: user.name,
+              onTap: () => _showNameDialog(context, ref, user),
+            ),
+            const Divider(height: 24, color: AppColors.outlineVariant),
+            _EditRow(
+              icon: Icons.mail_outline,
+              label: 'E-posta',
+              value: user.email,
+              onTap: () => _showEmailDialog(context, ref),
+            ),
+            const Divider(height: 24, color: AppColors.outlineVariant),
+            _EditRow(
+              icon: Icons.lock_outline,
+              label: 'Parola',
+              value: '••••••••',
+              onTap: () => _showPasswordDialog(context, ref),
+            ),
+          ],
+        ),
+      );
 }
 
 // --- Profil fotoğrafı ------------------------------------------------------
@@ -102,6 +102,12 @@ class _AvatarSection extends ConsumerStatefulWidget {
 class _AvatarSectionState extends ConsumerState<_AvatarSection> {
   bool _isBusy = false;
 
+  /// Sunucu fotoğrafı satır içinde sakladığı için seçimde küçültüyoruz.
+  static const _maxImageEdge = 512.0;
+
+  static const _avatarSize = 112.0;
+  static const _initialsSize = 40.0;
+
   static const _contentTypesByExtension = {
     'png': 'image/png',
     'webp': 'image/webp',
@@ -112,21 +118,22 @@ class _AvatarSectionState extends ConsumerState<_AvatarSection> {
   Future<void> _pickAndUpload() async {
     final picked = await ImagePicker().pickImage(
       source: ImageSource.gallery,
-      // Sunucu fotoğrafı satır içinde sakladığı için burada küçültüyoruz.
-      maxWidth: 512,
-      maxHeight: 512,
+      maxWidth: _maxImageEdge,
+      maxHeight: _maxImageEdge,
     );
 
     if (picked == null) return;
 
     final extension = picked.name.split('.').last.toLowerCase();
-    final contentType =
-        picked.mimeType ?? _contentTypesByExtension[extension];
+    final contentType = picked.mimeType ?? _contentTypesByExtension[extension];
 
     if (contentType == null ||
         !_contentTypesByExtension.containsValue(contentType)) {
-      _showMessage('Yalnızca JPEG, PNG ve WebP fotoğraflar yüklenebilir.',
-          isError: true);
+      if (mounted) {
+        context.showError(
+          'Yalnızca JPEG, PNG ve WebP fotoğraflar yüklenebilir.',
+        );
+      }
       return;
     }
 
@@ -154,23 +161,12 @@ class _AvatarSectionState extends ConsumerState<_AvatarSection> {
       await action();
       // Fotoğraf `profileProvider`'a bağlı olduğu için tek invalidate yeter.
       ref.invalidate(profileProvider);
-      _showMessage(successMessage);
+      if (mounted) context.showMessage(successMessage);
     } on ApiException catch (e) {
-      _showMessage(e.message, isError: true);
+      if (mounted) context.showError(e.message);
     } finally {
       if (mounted) setState(() => _isBusy = false);
     }
-  }
-
-  void _showMessage(String message, {bool isError = false}) {
-    if (!mounted) return;
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: isError ? AppColors.error : null,
-      ),
-    );
   }
 
   @override
@@ -182,9 +178,11 @@ class _AvatarSectionState extends ConsumerState<_AvatarSection> {
         Stack(
           alignment: Alignment.bottomRight,
           children: [
-            _AvatarCircle(
-              user: widget.user,
+            AvatarCircle(
+              initials: widget.user.initials,
               bytes: avatar.value,
+              diameter: _avatarSize,
+              initialsSize: _initialsSize,
             ),
             IconButton.filled(
               onPressed: _isBusy ? null : _pickAndUpload,
@@ -221,40 +219,6 @@ class _AvatarSectionState extends ConsumerState<_AvatarSection> {
   }
 }
 
-class _AvatarCircle extends StatelessWidget {
-  const _AvatarCircle({required this.user, required this.bytes});
-
-  final UserSummary user;
-  final Uint8List? bytes;
-
-  @override
-  Widget build(BuildContext context) => Container(
-        width: 112,
-        height: 112,
-        alignment: Alignment.center,
-        clipBehavior: Clip.antiAlias,
-        decoration: const BoxDecoration(
-          color: AppColors.primaryContainer,
-          shape: BoxShape.circle,
-        ),
-        child: bytes == null
-            ? Text(
-                user.initials,
-                style: const TextStyle(
-                  fontSize: 40,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.onPrimaryContainer,
-                ),
-              )
-            : Image.memory(
-                bytes!,
-                width: 112,
-                height: 112,
-                fit: BoxFit.cover,
-              ),
-      );
-}
-
 // --- Pop-up'lar ------------------------------------------------------------
 
 Future<void> _showNameDialog(
@@ -274,13 +238,14 @@ Future<void> _showNameDialog(
           label: 'İsim',
           controller: controller,
           textInputAction: TextInputAction.done,
-          validator: (value) => (value == null || value.trim().isEmpty)
-              ? 'İsim gerekli'
-              : null,
+          validator: (value) =>
+              (value == null || value.trim().isEmpty) ? 'İsim gerekli' : null,
         ),
       ],
       onSubmit: () async {
-        await ref.read(sereneApiProvider).updateMe(name: controller.text.trim());
+        await ref
+            .read(sereneApiProvider)
+            .updateMe(name: controller.text.trim());
         ref.invalidate(profileProvider);
         return 'İsmin güncellendi.';
       },
@@ -303,9 +268,7 @@ Future<void> _showEmailDialog(BuildContext context, WidgetRef ref) async {
           label: 'Yeni e-posta',
           controller: emailController,
           keyboardType: TextInputType.emailAddress,
-          validator: (value) => (value == null || !value.contains('@'))
-              ? 'Geçerli bir e-posta gir'
-              : null,
+          validator: validateEmail,
         ),
         const SizedBox(height: 16),
         UnderlinedTextField(
@@ -392,9 +355,8 @@ Future<void> _showPasswordDialog(BuildContext context, WidgetRef ref) async {
           controller: repeatController,
           obscureText: true,
           textInputAction: TextInputAction.done,
-          validator: (value) => value != newController.text
-              ? 'Parolalar eşleşmiyor'
-              : null,
+          validator: (value) =>
+              value != newController.text ? 'Parolalar eşleşmiyor' : null,
         ),
       ],
       onSubmit: () async {
@@ -470,11 +432,8 @@ class _FormDialogState<T> extends State<_FormDialog<T>> {
         backgroundColor: AppColors.surfaceContainerLowest,
         title: Text(
           widget.title,
-          style: const TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.w600,
-            color: AppColors.primary,
-          ),
+          style:
+              context.text.headlineSmall?.copyWith(color: AppColors.primary),
         ),
         content: Form(
           key: _formKey,
@@ -485,11 +444,8 @@ class _FormDialogState<T> extends State<_FormDialog<T>> {
               if (widget.description != null) ...[
                 Text(
                   widget.description!,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    height: 18 / 13,
-                    color: AppColors.onSurfaceVariant,
-                  ),
+                  style: context.text.bodyMedium
+                      ?.copyWith(color: AppColors.onSurfaceVariant),
                 ),
                 const SizedBox(height: 16),
               ],
@@ -498,10 +454,8 @@ class _FormDialogState<T> extends State<_FormDialog<T>> {
                 const SizedBox(height: 16),
                 Text(
                   _error!,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    color: AppColors.error,
-                  ),
+                  style:
+                      context.text.bodyMedium?.copyWith(color: AppColors.error),
                 ),
               ],
             ],
@@ -560,15 +514,7 @@ class _EditRow extends StatelessWidget {
           padding: const EdgeInsets.symmetric(vertical: 4),
           child: Row(
             children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: const BoxDecoration(
-                  color: AppColors.surfaceContainer,
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(icon, size: 20, color: AppColors.secondary),
-              ),
+              CircleIcon(icon),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
@@ -576,18 +522,14 @@ class _EditRow extends StatelessWidget {
                   children: [
                     Text(
                       label,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: AppColors.onSurfaceVariant,
-                      ),
+                      style: context.text.bodySmall
+                          ?.copyWith(color: AppColors.onSurfaceVariant),
                     ),
                     Text(
                       value,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 16,
-                        color: AppColors.onSurface,
-                      ),
+                      style: context.text.bodyLarge
+                          ?.copyWith(color: AppColors.onSurface),
                     ),
                   ],
                 ),
@@ -595,23 +537,6 @@ class _EditRow extends StatelessWidget {
               const Icon(Icons.edit_outlined, color: AppColors.outline),
             ],
           ),
-        ),
-      );
-}
-
-class _CardTitle extends StatelessWidget {
-  const _CardTitle(this.text);
-
-  final String text;
-
-  @override
-  Widget build(BuildContext context) => Text(
-        text,
-        style: const TextStyle(
-          fontSize: 14,
-          fontWeight: FontWeight.w600,
-          letterSpacing: 1.2,
-          color: AppColors.secondary,
         ),
       );
 }

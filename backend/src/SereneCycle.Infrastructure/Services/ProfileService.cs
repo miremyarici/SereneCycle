@@ -28,16 +28,25 @@ public class ProfileService(
         Guid userId,
         CancellationToken cancellationToken = default)
     {
-        var user = await userManager.FindByIdAsync(userId.ToString());
+        // Salt okuma: varlığı izlemeye ve avatar baytlarını (2 MB'a kadar)
+        // ağa çıkarmaya gerek yok, doğrudan DTO'ya projeksiyon yeter.
+        var summary = await db.Users
+            .AsNoTracking()
+            .Where(user => user.Id == userId)
+            .Select(UserSummaryFactory.Projection)
+            .FirstOrDefaultAsync(cancellationToken);
 
-        if (user is null)
+        if (summary is null)
         {
             return Result<UserSummary>.Failure(
-                ErrorCode.NotFound, "Kullanıcı bulunamadı.");
+                ErrorCode.NotFound, ServiceErrors.UserNotFound);
         }
 
-        return Result<UserSummary>.Success(
-            await ToSummaryAsync(user, cancellationToken));
+        return Result<UserSummary>.Success(summary with
+        {
+            HasCompletedOnboarding =
+                await HasAnyCycleAsync(userId, cancellationToken)
+        });
     }
 
     public async Task<Result<UserSummary>> UpdateAsync(
@@ -50,7 +59,7 @@ public class ProfileService(
         if (user is null)
         {
             return Result<UserSummary>.Failure(
-                ErrorCode.NotFound, "Kullanıcı bulunamadı.");
+                ErrorCode.NotFound, ServiceErrors.UserNotFound);
         }
 
         if (request.Name is not null)
@@ -125,7 +134,7 @@ public class ProfileService(
         if (user is null)
         {
             return Result<UserSummary>.Failure(
-                ErrorCode.NotFound, "Kullanıcı bulunamadı.");
+                ErrorCode.NotFound, ServiceErrors.UserNotFound);
         }
 
         var contentType = request.ContentType.Trim().ToLowerInvariant();
@@ -179,7 +188,7 @@ public class ProfileService(
         if (user is null)
         {
             return Result<UserSummary>.Failure(
-                ErrorCode.NotFound, "Kullanıcı bulunamadı.");
+                ErrorCode.NotFound, ServiceErrors.UserNotFound);
         }
 
         user.AvatarData = null;
@@ -202,7 +211,7 @@ public class ProfileService(
 
         if (user is null)
         {
-            return Result.Failure(ErrorCode.NotFound, "Kullanıcı bulunamadı.");
+            return Result.Failure(ErrorCode.NotFound, ServiceErrors.UserNotFound);
         }
 
         if (!await userManager.CheckPasswordAsync(user, request.CurrentPassword))
@@ -256,7 +265,7 @@ public class ProfileService(
         if (user is null)
         {
             return Result<UserSummary>.Failure(
-                ErrorCode.NotFound, "Kullanıcı bulunamadı.");
+                ErrorCode.NotFound, ServiceErrors.UserNotFound);
         }
 
         if (user.PendingEmail is null
@@ -322,7 +331,7 @@ public class ProfileService(
 
         if (user is null)
         {
-            return Result.Failure(ErrorCode.NotFound, "Kullanıcı bulunamadı.");
+            return Result.Failure(ErrorCode.NotFound, ServiceErrors.UserNotFound);
         }
 
         var changed = await userManager.ChangePasswordAsync(
@@ -346,30 +355,20 @@ public class ProfileService(
 
         // Şifre değişti: kayıtlı bütün oturumlar düşsün. Mevcut erişim
         // token'ı süresi dolana kadar çalışmaya devam eder, yenilenemez.
-        await db.RefreshTokens
-            .Where(t => t.UserId == userId && t.RevokedAt == null)
-            .ExecuteUpdateAsync(
-                s => s.SetProperty(t => t.RevokedAt, DateTimeOffset.UtcNow),
-                cancellationToken);
+        await db.RevokeAllForUserAsync(userId, cancellationToken);
 
         return Result.Success();
     }
 
     private async Task<UserSummary> ToSummaryAsync(
         AppUser user,
-        CancellationToken cancellationToken)
-    {
-        var hasCycle = await db.Cycles
-            .AnyAsync(c => c.UserId == user.Id, cancellationToken);
+        CancellationToken cancellationToken) =>
+        UserSummaryFactory.From(
+            user, await HasAnyCycleAsync(user.Id, cancellationToken));
 
-        return new UserSummary(
-            user.Id,
-            user.Name,
-            user.Email!,
-            user.EmailConfirmed,
-            user.AvgCycleLength,
-            user.AvgPeriodLength,
-            HasCompletedOnboarding: hasCycle,
-            AvatarUpdatedAt: user.AvatarUpdatedAt);
-    }
+    /// <summary>Onboarding tamamlandı mı: ilk döngü kaydı açıldı mı.</summary>
+    private Task<bool> HasAnyCycleAsync(
+        Guid userId,
+        CancellationToken cancellationToken) =>
+        db.Cycles.AnyAsync(c => c.UserId == userId, cancellationToken);
 }

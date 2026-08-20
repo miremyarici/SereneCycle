@@ -122,6 +122,12 @@ if (app.Environment.IsDevelopment())
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
     await db.Database.MigrateAsync();
 
+    // Katalog "SeedDevelopmentData" bayrağının dışında: örnek veri değil,
+    // Beslenme ve Hareket ekranlarının içeriği. Bayrak kapalıyken de
+    // hizalanmalı, yoksa katalog düzeltmeleri uygulamaya hiç ulaşmaz.
+    // Üretimde migration'lar elle uygulandıktan sonra bu da çağrılmalı.
+    await ContentCatalogSeeder.SyncAsync(scope.ServiceProvider);
+
     if (app.Configuration.GetValue("SeedDevelopmentData", true))
     {
         await DevelopmentDataSeeder.SeedAsync(scope.ServiceProvider);

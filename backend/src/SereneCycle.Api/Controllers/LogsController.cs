@@ -27,13 +27,9 @@ public class LogsController(ILogService logService) : ApiControllerBase
     [ProducesResponseType(typeof(DailyLogResponse), StatusCodes.Status200OK)]
     public async Task<ActionResult<DailyLogResponse>> Get(
         DateOnly date,
-        CancellationToken cancellationToken)
-    {
-        var result =
-            await logService.GetAsync(CurrentUserId, date, cancellationToken);
-
-        return result.IsSuccess ? Ok(result.Value) : Problem(result);
-    }
+        CancellationToken cancellationToken) =>
+        OkOrProblem(
+            await logService.GetAsync(CurrentUserId, date, cancellationToken));
 
     /// <summary>
     /// Günün kaydını üzerine yazar. Kanama işaretlenmişse ve bu gün
@@ -45,11 +41,7 @@ public class LogsController(ILogService logService) : ApiControllerBase
     public async Task<ActionResult<DailyLogResponse>> Save(
         DateOnly date,
         SaveDailyLogRequest request,
-        CancellationToken cancellationToken)
-    {
-        var result = await logService.SaveAsync(
-            CurrentUserId, date, request, cancellationToken);
-
-        return result.IsSuccess ? Ok(result.Value) : Problem(result);
-    }
+        CancellationToken cancellationToken) =>
+        OkOrProblem(await logService.SaveAsync(
+            CurrentUserId, date, request, cancellationToken));
 }

@@ -1,16 +1,13 @@
-using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using SereneCycle.Application.Common;
 using SereneCycle.Application.Phases;
 using SereneCycle.Application.Risk;
 using SereneCycle.Domain.Cycles;
-using SereneCycle.Infrastructure.Identity;
 using SereneCycle.Infrastructure.Persistence;
 
 namespace SereneCycle.Infrastructure.Services;
 
 public class PhaseService(
-    UserManager<AppUser> userManager,
     AppDbContext db,
     TimeProvider timeProvider,
     IRiskService riskService) : IPhaseService
@@ -18,19 +15,26 @@ public class PhaseService(
     /// <summary>Ana sayfadaki yatay takvim şeridinde gösterilen gün sayısı.</summary>
     private const int CalendarStripDays = 7;
 
+    private const string NoCycleYet =
+        "Henüz döngü kaydın yok. Önce onboarding'i tamamla.";
+
+    /// <summary>Takvim ucunun kabul ettiği yıl aralığı.</summary>
+    private const int MinCalendarYear = 2000;
+    private const int MaxCalendarYear = 2100;
+
     public async Task<Result<PhaseTodayResponse>> GetTodayAsync(
         Guid userId,
         CancellationToken cancellationToken = default)
     {
-        var user = await userManager.FindByIdAsync(userId.ToString());
+        var today = Today();
 
-        if (user is null)
+        var settings = await FindCycleSettingsAsync(userId, cancellationToken);
+
+        if (settings is null)
         {
             return Result<PhaseTodayResponse>.Failure(
-                ErrorCode.NotFound, "Kullanıcı bulunamadı.");
+                ErrorCode.NotFound, ServiceErrors.UserNotFound);
         }
-
-        var today = DateOnly.FromDateTime(timeProvider.GetUtcNow().UtcDateTime);
 
         // Bugünü kapsayan en son döngü. Kullanıcı geçmişe dönük bir tarih
         // girmiş olabilir, bu yüzden "en yeni" değil "bugünden önceki en yeni".
@@ -42,21 +46,16 @@ public class PhaseService(
         if (currentCycle is null)
         {
             return Result<PhaseTodayResponse>.Failure(
-                ErrorCode.NotFound,
-                "Henüz döngü kaydın yok. Önce onboarding'i tamamla.");
+                ErrorCode.NotFound, NoCycleYet);
         }
 
-        var prediction = PhaseCalculator.Calculate(
-            currentCycle.StartDate,
-            user.AvgCycleLength,
-            user.AvgPeriodLength,
-            today);
+        var prediction = Predict(settings, currentCycle.StartDate, today);
 
         var firstDay = today.AddDays(-(CalendarStripDays / 2));
 
         var calendar = await BuildDaysAsync(
             userId,
-            user,
+            settings,
             firstDay,
             firstDay.AddDays(CalendarStripDays - 1),
             today,
@@ -82,36 +81,101 @@ public class PhaseService(
             Risk: risk));
     }
 
+    public async Task<Result<CyclePhase>> GetCurrentPhaseAsync(
+        Guid userId,
+        CancellationToken cancellationToken = default)
+    {
+        var today = Today();
+
+        var settings = await FindCycleSettingsAsync(userId, cancellationToken);
+
+        if (settings is null)
+        {
+            return Result<CyclePhase>.Failure(
+                ErrorCode.NotFound, ServiceErrors.UserNotFound);
+        }
+
+        // Yalnızca başlangıç tarihi okunur: faz için döngü satırının
+        // tamamına da, takvim şeridine de, risk kartına da gerek yok.
+        var cycleStart = await db.Cycles
+            .Where(c => c.UserId == userId && c.StartDate <= today)
+            .OrderByDescending(c => c.StartDate)
+            .Select(c => (DateOnly?)c.StartDate)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        return cycleStart is { } start
+            ? Result<CyclePhase>.Success(
+                Predict(settings, start, today).CurrentPhase)
+            : Result<CyclePhase>.Failure(ErrorCode.NotFound, NoCycleYet);
+    }
+
     public async Task<Result<CalendarMonthResponse>> GetMonthAsync(
         Guid userId,
         int year,
         int month,
         CancellationToken cancellationToken = default)
     {
-        if (year is < 2000 or > 2100 || month is < 1 or > 12)
+        if (year is < MinCalendarYear or > MaxCalendarYear
+            || month is < 1 or > 12)
         {
             return Result<CalendarMonthResponse>.Failure(
                 ErrorCode.Validation, "Geçersiz ay.");
         }
 
-        var user = await userManager.FindByIdAsync(userId.ToString());
+        var settings = await FindCycleSettingsAsync(userId, cancellationToken);
 
-        if (user is null)
+        if (settings is null)
         {
             return Result<CalendarMonthResponse>.Failure(
-                ErrorCode.NotFound, "Kullanıcı bulunamadı.");
+                ErrorCode.NotFound, ServiceErrors.UserNotFound);
         }
 
-        var today = DateOnly.FromDateTime(timeProvider.GetUtcNow().UtcDateTime);
         var firstDay = new DateOnly(year, month, 1);
         var lastDay = firstDay.AddDays(DateTime.DaysInMonth(year, month) - 1);
 
         var days = await BuildDaysAsync(
-            userId, user, firstDay, lastDay, today, cancellationToken);
+            userId, settings, firstDay, lastDay, Today(), cancellationToken);
 
         return Result<CalendarMonthResponse>.Success(
             new CalendarMonthResponse(year, month, days));
     }
+
+    private DateOnly Today() =>
+        DateOnly.FromDateTime(timeProvider.GetUtcNow().UtcDateTime);
+
+    /// <summary>
+    /// Faz hesabının ihtiyacı olan iki ayar. Kullanıcı satırının tamamı
+    /// çekilmiyor: <c>AvatarData</c> satır içinde saklandığı için (2 MB'a
+    /// kadar) her ana sayfa açılışında ağa çıkmasının anlamı yok.
+    /// </summary>
+    private async Task<CycleSettings?> FindCycleSettingsAsync(
+        Guid userId,
+        CancellationToken cancellationToken)
+    {
+        var settings = await db.Users
+            .Where(user => user.Id == userId)
+            .Select(user => new
+            {
+                user.AvgCycleLength,
+                user.AvgPeriodLength
+            })
+            .FirstOrDefaultAsync(cancellationToken);
+
+        return settings is null
+            ? null
+            : new CycleSettings(
+                settings.AvgCycleLength, settings.AvgPeriodLength);
+    }
+
+    private static PhasePrediction Predict(
+        CycleSettings settings,
+        DateOnly cycleStart,
+        DateOnly date) =>
+        PhaseCalculator.Calculate(
+            cycleStart,
+            settings.AvgCycleLength,
+            settings.AvgPeriodLength,
+            date);
 
     /// <summary>
     /// [firstDay, lastDay] aralığındaki her gün için fazı, adet günü olup
@@ -119,13 +183,13 @@ public class PhaseService(
     /// </summary>
     private async Task<IReadOnlyList<CalendarDay>> BuildDaysAsync(
         Guid userId,
-        AppUser user,
+        CycleSettings settings,
         DateOnly firstDay,
         DateOnly lastDay,
         DateOnly today,
         CancellationToken cancellationToken)
     {
-        var logs = await db.DailyLogs
+        var logsByDate = await db.DailyLogs
             .Where(l => l.UserId == userId
                         && l.LogDate >= firstDay
                         && l.LogDate <= lastDay)
@@ -136,9 +200,7 @@ public class PhaseService(
                 l.BloodColor,
                 l.HasSpotting
             })
-            .ToListAsync(cancellationToken);
-
-        var logsByDate = logs.ToDictionary(l => l.LogDate);
+            .ToDictionaryAsync(l => l.LogDate, cancellationToken);
 
         // Aralık geçmişe uzanabildiği için tek bir "güncel döngü" yetmiyor:
         // her gün, o güne kadar başlamış en son döngüye göre hesaplanır.
@@ -148,40 +210,37 @@ public class PhaseService(
             .Select(c => c.StartDate)
             .ToListAsync(cancellationToken);
 
-        var days = new List<CalendarDay>(lastDay.DayNumber - firstDay.DayNumber + 1);
+        var days =
+            new List<CalendarDay>(lastDay.DayNumber - firstDay.DayNumber + 1);
+
+        // Günler de başlangıçlar da artan sırada: listeyi her gün için
+        // baştan taramak yerine tek bir imleç ilerletiliyor.
+        // O(gün × döngü) → O(gün + döngü).
+        var nextCycle = 0;
+        DateOnly? activeCycleStart = null;
 
         for (var date = firstDay; date <= lastDay; date = date.AddDays(1))
         {
-            logsByDate.TryGetValue(date, out var log);
+            while (nextCycle < cycleStarts.Count
+                   && cycleStarts[nextCycle] <= date)
+            {
+                activeCycleStart = cycleStarts[nextCycle++];
+            }
 
-            var cycleStart = cycleStarts.LastOrDefault(s => s <= date);
+            logsByDate.TryGetValue(date, out var log);
 
             // İlk döngüden önceki günlerin verisi yok; faz uydurmak yerine
             // günü nötr gösteriyoruz.
-            if (cycleStart == default)
-            {
-                days.Add(new CalendarDay(
-                    Date: date,
-                    CycleDay: 0,
-                    Phase: CyclePhase.Menstrual,
-                    IsToday: date == today,
-                    IsPeriodDay: false,
-                    HasLog: log is not null,
-                    HasBleeding: log?.HasBleeding ?? false,
-                    BloodColor: log?.BloodColor,
-                    HasSpotting: log?.HasSpotting ?? false));
-                continue;
-            }
-
-            var prediction = PhaseCalculator.Calculate(
-                cycleStart, user.AvgCycleLength, user.AvgPeriodLength, date);
+            var prediction = activeCycleStart is { } start
+                ? Predict(settings, start, date)
+                : null;
 
             days.Add(new CalendarDay(
                 Date: date,
-                CycleDay: prediction.CycleDay,
-                Phase: prediction.CurrentPhase,
+                CycleDay: prediction?.CycleDay ?? 0,
+                Phase: prediction?.CurrentPhase ?? CyclePhase.Menstrual,
                 IsToday: date == today,
-                IsPeriodDay: prediction.CurrentPhase == CyclePhase.Menstrual,
+                IsPeriodDay: prediction?.CurrentPhase == CyclePhase.Menstrual,
                 HasLog: log is not null,
                 HasBleeding: log?.HasBleeding ?? false,
                 BloodColor: log?.BloodColor,
@@ -190,4 +249,7 @@ public class PhaseService(
 
         return days;
     }
+
+    /// <summary>Faz hesabının kullanıcıdan ihtiyaç duyduğu tek şey.</summary>
+    private sealed record CycleSettings(int AvgCycleLength, int AvgPeriodLength);
 }

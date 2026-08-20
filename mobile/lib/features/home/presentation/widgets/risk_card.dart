@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/api/models.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/app_typography.dart';
 import '../../../../core/widgets/soft_shadow_card.dart';
 
 /// Ana sayfadaki risk kartı. Bütün metinler ve eşikler sunucudan geliyor;
@@ -33,11 +34,8 @@ class RiskCard extends StatelessWidget {
               Expanded(
                 child: Text(
                   risk.title,
-                  style: const TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.primary,
-                  ),
+                  style: context.text.headlineSmall
+                      ?.copyWith(color: AppColors.primary),
                 ),
               ),
             ],
@@ -45,11 +43,8 @@ class RiskCard extends StatelessWidget {
           const SizedBox(height: 12),
           Text(
             risk.message,
-            style: const TextStyle(
-              fontSize: 14,
-              height: 20 / 14,
-              color: AppColors.onSurfaceVariant,
-            ),
+            style: context.text.bodyMedium
+                ?.copyWith(color: AppColors.onSurfaceVariant),
           ),
           for (final flag in risk.flags) ...[
             const SizedBox(height: 12),
@@ -95,20 +90,14 @@ class _FlagRow extends StatelessWidget {
               children: [
                 Text(
                   flag.title,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.onSurface,
-                  ),
+                  style: context.text.titleSmall
+                      ?.copyWith(color: AppColors.onSurface),
                 ),
                 const SizedBox(height: 2),
                 Text(
                   flag.detail,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    height: 18 / 13,
-                    color: AppColors.onSurfaceVariant,
-                  ),
+                  style: context.text.bodyMedium
+                      ?.copyWith(color: AppColors.onSurfaceVariant),
                 ),
               ],
             ),
@@ -168,10 +157,8 @@ class _Stat extends StatelessWidget {
           const SizedBox(width: 4),
           Text(
             label,
-            style: const TextStyle(
-              fontSize: 12,
-              color: AppColors.onSurfaceVariant,
-            ),
+            style: context.text.bodySmall
+                ?.copyWith(color: AppColors.onSurfaceVariant),
           ),
         ],
       );

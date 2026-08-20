@@ -54,6 +54,8 @@ class AuthController extends Notifier<UserSummary?> {
     ref.invalidate(avatarProvider);
     ref.invalidate(calendarMonthProvider);
     ref.invalidate(dailyLogProvider);
+    ref.invalidate(exerciseMinutesProvider);
+    ref.invalidate(contentFeedbackProvider);
   }
 }
 
@@ -70,8 +72,112 @@ final nutritionProvider = FutureProvider<PhaseContent>(
   (ref) => ref.watch(sereneApiProvider).getNutrition(),
 );
 
-final exerciseProvider = FutureProvider<PhaseContent>(
-  (ref) => ref.watch(sereneApiProvider).getExercise(),
+/// Hareket ekranındaki süre filtresi. null = "süre kısıtım yok".
+class ExerciseMinutesController extends Notifier<int?> {
+  @override
+  int? build() => null;
+
+  void select(int? minutes) => state = minutes;
+}
+
+final exerciseMinutesProvider =
+    NotifierProvider<ExerciseMinutesController, int?>(
+  ExerciseMinutesController.new,
+);
+
+final exerciseProvider = FutureProvider<PhaseContent>((ref) {
+  final minutes = ref.watch(exerciseMinutesProvider);
+  return ref.watch(sereneApiProvider).getExercise(minutes: minutes);
+});
+
+/// Geri bildirimin hangi listeden geldiği. Sunucu 👍/👎'yı işledikten sonra
+/// sıralama değişir; hangi listeyi tazelemek gerektiğini yalnızca çağıran
+/// bilir.
+enum ContentSurface {
+  nutrition,
+  exercise;
+
+  FutureProvider<PhaseContent> get provider =>
+      this == ContentSurface.nutrition ? nutritionProvider : exerciseProvider;
+}
+
+/// Bu oturumda verilen geri bildirimler. Kalıcı kayıt sunucudadır; buradaki
+/// kopya yalnızca düğmelerin seçili görünmesi içindir, bu yüzden oturum
+/// kapanınca düşmesi sorun değil.
+class ContentFeedbackState {
+  const ContentFeedbackState({
+    this.reactions = const {},
+    this.completed = const {},
+  });
+
+  final Map<int, ContentReaction> reactions;
+  final Set<int> completed;
+
+  ContentFeedbackState copyWith({
+    Map<int, ContentReaction>? reactions,
+    Set<int>? completed,
+  }) =>
+      ContentFeedbackState(
+        reactions: reactions ?? this.reactions,
+        completed: completed ?? this.completed,
+      );
+}
+
+class ContentFeedbackController extends Notifier<ContentFeedbackState> {
+  @override
+  ContentFeedbackState build() => const ContentFeedbackState();
+
+  /// Aynı düğmeye tekrar basmak geri bildirimi geri almaz: gönderilmiş
+  /// sinyali sunucudan silmek için bir uç yok, o yüzden yalnızca değiştirir.
+  Future<void> react(
+    int contentItemId,
+    ContentReaction reaction, {
+    required ContentSurface surface,
+  }) async {
+    final previous = state;
+
+    state = state.copyWith(
+      reactions: {...state.reactions, contentItemId: reaction},
+    );
+
+    try {
+      await ref.read(sereneApiProvider).sendContentFeedback(
+            contentItemId,
+            liked: reaction == ContentReaction.liked,
+          );
+    } catch (_) {
+      state = previous;
+      rethrow;
+    }
+
+    // Sunucu bu öğenin etiketlerini artık farklı puanlıyor. Listeyi
+    // tazelemezsek sıralama ancak ekran bir dahaki açılışta değişir ve
+    // düğme "hiçbir şey yapmıyor" gibi görünür.
+    ref.invalidate(surface.provider);
+  }
+
+  /// "Tamamladım" listeyi tazelemez: kullanıcı yaptığı hareketin işaretli
+  /// hâlini görmeye devam etmeli. Sinyal yine kaydedilir, etkisi bir sonraki
+  /// yüklemede sıralamaya yansır.
+  Future<void> markCompleted(int contentItemId) async {
+    final previous = state;
+
+    state = state.copyWith(completed: {...state.completed, contentItemId});
+
+    try {
+      await ref
+          .read(sereneApiProvider)
+          .sendContentFeedback(contentItemId, completed: true);
+    } catch (_) {
+      state = previous;
+      rethrow;
+    }
+  }
+}
+
+final contentFeedbackProvider =
+    NotifierProvider<ContentFeedbackController, ContentFeedbackState>(
+  ContentFeedbackController.new,
 );
 
 final profileProvider = FutureProvider<UserSummary>(

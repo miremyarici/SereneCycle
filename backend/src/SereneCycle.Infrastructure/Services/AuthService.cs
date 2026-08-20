@@ -188,7 +188,7 @@ public class AuthService(
         ClearCode(user);
 
         // Şifre değişti: mevcut bütün oturumlar düşsün.
-        await RevokeAllRefreshTokensAsync(user.Id, cancellationToken);
+        await db.RevokeAllForUserAsync(user.Id, cancellationToken);
         await userManager.UpdateAsync(user);
 
         return Result.Success();
@@ -308,26 +308,7 @@ public class AuthService(
             accessToken,
             expiresAt,
             refreshToken,
-            new UserSummary(
-                user.Id,
-                user.Name,
-                user.Email!,
-                user.EmailConfirmed,
-                user.AvgCycleLength,
-                user.AvgPeriodLength,
-                HasCompletedOnboarding: hasCycle,
-                AvatarUpdatedAt: user.AvatarUpdatedAt));
-    }
-
-    private async Task RevokeAllRefreshTokensAsync(
-        Guid userId,
-        CancellationToken cancellationToken)
-    {
-        await db.RefreshTokens
-            .Where(t => t.UserId == userId && t.RevokedAt == null)
-            .ExecuteUpdateAsync(
-                s => s.SetProperty(t => t.RevokedAt, DateTimeOffset.UtcNow),
-                cancellationToken);
+            UserSummaryFactory.From(user, hasCycle));
     }
 
     private static string Normalize(string email) => email.Trim().ToLowerInvariant();

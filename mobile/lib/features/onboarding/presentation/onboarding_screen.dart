@@ -4,15 +4,24 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/api/api_client.dart';
+import '../../../core/api/models.dart';
 import '../../../core/providers/app_providers.dart';
 import '../../../core/router/route_paths.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_typography.dart';
+import '../../../core/utils/period_start_picker.dart';
+import '../../../core/widgets/app_snack_bar.dart';
 import '../../../core/widgets/pill_button.dart';
 import '../../../core/widgets/soft_shadow_card.dart';
+import '../../../core/widgets/stepper_button.dart';
 
-/// Doğrulamadan sonraki 3 soruluk sihirbaz: son adet başlangıcı, ortalama
-/// döngü uzunluğu, adet süresi. `/phase/today` bu bilgi olmadan 404 döner,
-/// bu yüzden bottom nav'a girmeden önce mecburi.
+/// Doğrulamadan sonraki sihirbaz. İlk üç adım döngü tahmini için mecburi:
+/// `/phase/today` bu bilgi olmadan 404 döner. Son iki adım öneri motorunu
+/// besler ve bilinçli olarak atlanabilir — kısıt işaretlenmezse hiçbir şey
+/// elenmez, zevk işaretlenmezse motor düzgün dağılımdan başlar.
+///
+/// İki anketin nereye gittiği ayrıdır: kısıtlar (alerji, sakatlık, ekipman)
+/// sert filtreye, zevk cevapları öğrenmenin başlangıç noktasına yazılır.
 class OnboardingScreen extends ConsumerStatefulWidget {
   const OnboardingScreen({super.key});
 
@@ -21,7 +30,8 @@ class OnboardingScreen extends ConsumerStatefulWidget {
 }
 
 class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
-  static const _totalSteps = 3;
+  static const _totalSteps = 5;
+  static const _cardMaxWidth = 448.0;
 
   // Backend'in UpdateProfileRequest'teki [Range] sınırlarıyla eşleşir.
   static const _minCycleLength = 21;
@@ -29,27 +39,22 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   static const _minPeriodLength = 1;
   static const _maxPeriodLength = 14;
 
+  static const _defaultCycleLength = 28;
+  static const _defaultPeriodLength = 5;
+
   int _step = 1;
   DateTime? _lastPeriodStart;
-  int _cycleLength = 28;
-  int _periodLength = 5;
+  int _cycleLength = _defaultCycleLength;
+  int _periodLength = _defaultPeriodLength;
+  final Set<AvoidFlagOption> _avoidFlags = {};
+  final Map<TasteTagOption, ContentReaction> _tastes = {};
   bool _isSubmitting = false;
 
   bool get _canContinue => _step != 1 || _lastPeriodStart != null;
 
   Future<void> _pickPeriodStart() async {
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _lastPeriodStart ?? today,
-      firstDate: DateTime(today.year - 1, today.month, today.day),
-      lastDate: today,
-      helpText: 'Son adet başlangıcı',
-      confirmText: 'Seç',
-      cancelText: 'Vazgeç',
-    );
+    final picked =
+        await pickPeriodStartDate(context, initialDate: _lastPeriodStart);
 
     if (picked != null) {
       setState(() => _lastPeriodStart = picked);
@@ -71,30 +76,60 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     setState(() => _isSubmitting = true);
 
     try {
-      await ref.read(sereneApiProvider).updateMe(
-            avgCycleLength: _cycleLength,
-            avgPeriodLength: _periodLength,
-            lastPeriodStart: _lastPeriodStart,
-          );
-
-      ref.invalidate(profileProvider);
-      ref.invalidate(phaseTodayProvider);
-      ref.invalidate(nutritionProvider);
-      ref.invalidate(exerciseProvider);
-
+      await _submit();
       if (mounted) context.go(RoutePaths.home);
     } on ApiException catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(e.message),
-            backgroundColor: AppColors.error,
-          ),
-        );
-      }
+      if (mounted) context.showError(e.message);
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
     }
+  }
+
+  Future<void> _submit() async {
+    final api = ref.read(sereneApiProvider);
+
+    await api.updateMe(
+      avgCycleLength: _cycleLength,
+      avgPeriodLength: _periodLength,
+      lastPeriodStart: _lastPeriodStart,
+    );
+
+    await api.saveTastePreferences(
+      liked: _tagsWith(ContentReaction.liked),
+      disliked: _tagsWith(ContentReaction.disliked),
+      avoid: _avoidFlags,
+    );
+
+    ref.invalidate(profileProvider);
+    ref.invalidate(phaseTodayProvider);
+    ref.invalidate(nutritionProvider);
+    ref.invalidate(exerciseProvider);
+  }
+
+  Set<TasteTagOption> _tagsWith(ContentReaction reaction) => {
+        for (final entry in _tastes.entries)
+          if (entry.value == reaction) entry.key,
+      };
+
+  /// Çip üç durum arasında döner: nötr → severim → sevmem → nötr.
+  /// Nötr "orta puan" değil "bilgi yok" demektir, bu yüzden kaydedilmez.
+  void _cycleTaste(TasteTagOption tag) {
+    setState(() {
+      switch (_tastes[tag]) {
+        case null:
+          _tastes[tag] = ContentReaction.liked;
+        case ContentReaction.liked:
+          _tastes[tag] = ContentReaction.disliked;
+        case ContentReaction.disliked:
+          _tastes.remove(tag);
+      }
+    });
+  }
+
+  void _toggleAvoidFlag(AvoidFlagOption flag) {
+    setState(() {
+      if (!_avoidFlags.remove(flag)) _avoidFlags.add(flag);
+    });
   }
 
   @override
@@ -105,57 +140,28 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
           children: [
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: Row(
-                children: [
-                  SizedBox(
-                    width: 40,
-                    child: _step > 1
-                        ? IconButton(
-                            icon: const Icon(Icons.arrow_back),
-                            color: AppColors.primary,
-                            onPressed: _isSubmitting ? null : _back,
-                          )
-                        : null,
-                  ),
-                  Expanded(
-                    child: Row(
-                      children: List.generate(_totalSteps, (index) {
-                        final active = index < _step;
-                        return Expanded(
-                          child: Container(
-                            margin: EdgeInsets.only(
-                              right: index == _totalSteps - 1 ? 0 : 8,
-                            ),
-                            height: 6,
-                            decoration: BoxDecoration(
-                              color: active
-                                  ? AppColors.primaryContainer
-                                  : AppColors.surfaceContainerHighest,
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                          ),
-                        );
-                      }),
-                    ),
-                  ),
-                  const SizedBox(width: 40),
-                ],
+              child: _StepProgressBar(
+                step: _step,
+                totalSteps: _totalSteps,
+                onBack: _step > 1 && !_isSubmitting ? _back : null,
               ),
             ),
             Expanded(
               child: Center(
                 child: SingleChildScrollView(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24,
+                    vertical: 16,
+                  ),
                   child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 448),
+                    constraints: const BoxConstraints(maxWidth: _cardMaxWidth),
                     child: SoftShadowCard(
                       padding: const EdgeInsets.all(24),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          _buildStep(),
+                          _stepContent(),
                           const SizedBox(height: 24),
                           PillButton(
                             label: _step == _totalSteps ? 'Başla' : 'Devam Et',
@@ -176,7 +182,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     );
   }
 
-  Widget _buildStep() {
+  Widget _stepContent() {
     switch (_step) {
       case 1:
         return _StepContent(
@@ -192,8 +198,8 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
       case 2:
         return _StepContent(
           title: 'Ortalama döngü uzunluğun kaç gün?',
-          subtitle: 'Emin değilsen varsayılan 28 günle devam edebilirsin, '
-              'sonra düzeltebilirsin.',
+          subtitle: 'Emin değilsen varsayılan $_defaultCycleLength günle '
+              'devam edebilirsin, sonra düzeltebilirsin.',
           child: _Stepper(
             value: _cycleLength,
             min: _minCycleLength,
@@ -201,7 +207,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
             onChanged: (value) => setState(() => _cycleLength = value),
           ),
         );
-      default:
+      case 3:
         return _StepContent(
           title: 'Adetin genelde kaç gün sürüyor?',
           subtitle: 'Bu bilgiyi istediğin zaman profilinden değiştirebilirsin.',
@@ -212,8 +218,81 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
             onChanged: (value) => setState(() => _periodLength = value),
           ),
         );
+      case 4:
+        return _StepContent(
+          title: 'Dikkat etmemiz gereken bir şey var mı?',
+          subtitle: 'İşaretlediklerin önerilere hiç girmez. Emin değilsen '
+              'boş bırakabilirsin, sonra ekleyebilirsin.',
+          child: _AvoidFlagPicker(
+            selected: _avoidFlags,
+            onToggle: _toggleAvoidFlag,
+          ),
+        );
+      default:
+        return _StepContent(
+          title: 'Neleri seversin?',
+          subtitle: 'Bir kez dokun: severim. İkinci dokunuş: sevmem. '
+              'Bu yalnızca başlangıç noktası — gerisini önerilere verdiğin '
+              'tepkilerden öğreneceğiz.',
+          child: _TastePicker(selected: _tastes, onTap: _cycleTaste),
+        );
     }
   }
+}
+
+/// Üstteki geri düğmesi ve adım çubuğu.
+class _StepProgressBar extends StatelessWidget {
+  const _StepProgressBar({
+    required this.step,
+    required this.totalSteps,
+    required this.onBack,
+  });
+
+  static const _backSlotWidth = 40.0;
+  static const _barHeight = 6.0;
+  static const _barGap = 8.0;
+
+  final int step;
+  final int totalSteps;
+  final VoidCallback? onBack;
+
+  @override
+  Widget build(BuildContext context) => Row(
+        children: [
+          SizedBox(
+            width: _backSlotWidth,
+            child: step > 1
+                ? IconButton(
+                    icon: const Icon(Icons.arrow_back),
+                    color: AppColors.primary,
+                    onPressed: onBack,
+                  )
+                : null,
+          ),
+          Expanded(
+            child: Row(
+              children: [
+                for (var index = 0; index < totalSteps; index++)
+                  Expanded(
+                    child: Container(
+                      margin: EdgeInsets.only(
+                        right: index == totalSteps - 1 ? 0 : _barGap,
+                      ),
+                      height: _barHeight,
+                      decoration: BoxDecoration(
+                        color: index < step
+                            ? AppColors.primaryContainer
+                            : AppColors.surfaceContainerHighest,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(width: _backSlotWidth),
+        ],
+      );
 }
 
 class _StepContent extends StatelessWidget {
@@ -234,21 +313,14 @@ class _StepContent extends StatelessWidget {
         children: [
           Text(
             title,
-            style: const TextStyle(
-              fontSize: 24,
-              height: 32 / 24,
-              fontWeight: FontWeight.w600,
-              color: AppColors.onSurface,
-            ),
+            style: context.text.headlineMedium
+                ?.copyWith(color: AppColors.onSurface),
           ),
           const SizedBox(height: 8),
           Text(
             subtitle,
-            style: const TextStyle(
-              fontSize: 16,
-              height: 24 / 16,
-              color: AppColors.onSurfaceVariant,
-            ),
+            style: context.text.bodyLarge
+                ?.copyWith(color: AppColors.onSurfaceVariant),
           ),
           const SizedBox(height: 40),
           child,
@@ -264,31 +336,29 @@ class _PeriodStartPicker extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final dateFormat = DateFormat('d MMMM yyyy', 'tr');
+    final date = value;
 
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(12),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: AppColors.surfaceContainerLow,
           borderRadius: BorderRadius.circular(16),
         ),
         child: Row(
           children: [
-            const Icon(
-              Icons.edit_calendar_outlined,
-              color: AppColors.primary,
-            ),
+            const Icon(Icons.edit_calendar_outlined, color: AppColors.primary),
             const SizedBox(width: 12),
             Expanded(
               child: Text(
-                value == null ? 'Tarih seç' : dateFormat.format(value!),
-                style: TextStyle(
-                  fontSize: 16,
+                date == null
+                    ? 'Tarih seç'
+                    : DateFormat('d MMMM yyyy', 'tr').format(date),
+                style: context.text.bodyLarge?.copyWith(
                   fontWeight: FontWeight.w500,
-                  color: value == null
+                  color: date == null
                       ? AppColors.onSurfaceVariant
                       : AppColors.onSurface,
                 ),
@@ -310,6 +380,8 @@ class _Stepper extends StatelessWidget {
     required this.onChanged,
   });
 
+  static const _valueWidth = 96.0;
+
   final int value;
   final int min;
   final int max;
@@ -319,65 +391,191 @@ class _Stepper extends StatelessWidget {
   Widget build(BuildContext context) => Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          _StepButton(
+          StepperButton(
             icon: Icons.remove,
             tooltip: 'Azalt',
+            isLarge: true,
             onPressed: value > min ? () => onChanged(value - 1) : null,
           ),
           SizedBox(
-            width: 96,
+            width: _valueWidth,
             child: Column(
               children: [
                 Text(
                   '$value',
                   textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    fontSize: 32,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.primary,
-                  ),
+                  style: context.text.displayMedium
+                      ?.copyWith(color: AppColors.primary),
                 ),
-                const Text(
+                Text(
                   'gün',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: AppColors.onSurfaceVariant,
-                  ),
+                  style: context.text.bodySmall
+                      ?.copyWith(color: AppColors.onSurfaceVariant),
                 ),
               ],
             ),
           ),
-          _StepButton(
+          StepperButton(
             icon: Icons.add,
             tooltip: 'Artır',
+            isLarge: true,
             onPressed: value < max ? () => onChanged(value + 1) : null,
           ),
         ],
       );
 }
 
-class _StepButton extends StatelessWidget {
-  const _StepButton({
-    required this.icon,
-    required this.tooltip,
-    required this.onPressed,
-  });
+/// Kısıt anketi. Gruplar backend'deki sözlükle aynı: beslenme, sağlık,
+/// ekipman.
+class _AvoidFlagPicker extends StatelessWidget {
+  const _AvoidFlagPicker({required this.selected, required this.onToggle});
 
-  final IconData icon;
-  final String tooltip;
-  final VoidCallback? onPressed;
+  final Set<AvoidFlagOption> selected;
+  final ValueChanged<AvoidFlagOption> onToggle;
 
   @override
-  Widget build(BuildContext context) => IconButton(
-        onPressed: onPressed,
-        tooltip: tooltip,
-        icon: Icon(icon, size: 24),
-        style: IconButton.styleFrom(
-          backgroundColor: AppColors.surfaceContainer,
-          foregroundColor: AppColors.primary,
-          disabledForegroundColor: AppColors.outline,
-          minimumSize: const Size(56, 56),
-          shape: const CircleBorder(),
+  Widget build(BuildContext context) => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (final group in AvoidFlagGroup.values) ...[
+            _GroupTitle(group.title),
+            _ChipWrap(
+              children: [
+                for (final flag in AvoidFlagOption.inGroup(group))
+                  FilterChip(
+                    label: Text(flag.label),
+                    selected: selected.contains(flag),
+                    onSelected: (_) => onToggle(flag),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 20),
+          ],
+        ],
+      );
+}
+
+/// Zevk anketi. Üç durumlu: seçilmemiş çip "nötr" değil "bilgi yok"
+/// anlamına gelir ve sunucuya hiç gönderilmez.
+class _TastePicker extends StatelessWidget {
+  const _TastePicker({required this.selected, required this.onTap});
+
+  final Map<TasteTagOption, ContentReaction> selected;
+  final ValueChanged<TasteTagOption> onTap;
+
+  @override
+  Widget build(BuildContext context) => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (final group in TasteTagGroup.values) ...[
+            _GroupTitle(group.title),
+            _ChipWrap(
+              children: [
+                for (final tag in TasteTagOption.inGroup(group))
+                  _TasteChip(
+                    label: tag.label,
+                    reaction: selected[tag],
+                    onTap: () => onTap(tag),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 20),
+          ],
+        ],
+      );
+}
+
+class _ChipWrap extends StatelessWidget {
+  const _ChipWrap({required this.children});
+
+  static const _spacing = 8.0;
+
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) => Wrap(
+        spacing: _spacing,
+        runSpacing: _spacing,
+        children: children,
+      );
+}
+
+class _TasteChip extends StatelessWidget {
+  const _TasteChip({
+    required this.label,
+    required this.reaction,
+    required this.onTap,
+  });
+
+  static const _radius = 20.0;
+
+  final String label;
+  final ContentReaction? reaction;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final (background, foreground, icon) = switch (reaction) {
+      ContentReaction.liked => (
+          AppColors.secondaryContainer,
+          AppColors.primary,
+          Icons.thumb_up,
+        ),
+      ContentReaction.disliked => (
+          AppColors.surfaceContainerHighest,
+          AppColors.outline,
+          Icons.thumb_down,
+        ),
+      null => (AppColors.surfaceContainerLow, AppColors.onSurface, null),
+    };
+
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(_radius),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: background,
+          borderRadius: BorderRadius.circular(_radius),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (icon != null) ...[
+              Icon(icon, size: 14, color: foreground),
+              const SizedBox(width: 6),
+            ],
+            Text(
+              label,
+              style: context.text.bodyMedium?.copyWith(
+                fontWeight: FontWeight.w500,
+                color: foreground,
+                decoration: reaction == ContentReaction.disliked
+                    ? TextDecoration.lineThrough
+                    : null,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _GroupTitle extends StatelessWidget {
+  const _GroupTitle(this.title);
+
+  final String title;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.only(bottom: 12),
+        child: Text(
+          title,
+          style: context.text.titleSmall
+              ?.copyWith(color: AppColors.onSurfaceVariant),
         ),
       );
 }

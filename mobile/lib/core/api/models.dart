@@ -56,13 +56,14 @@ class UserSummary {
 
   bool get hasAvatar => avatarUpdatedAt != null;
 
+  /// Her çağrıda yeniden derlenmesin diye sınıf düzeyinde: [initials] profil
+  /// ekranında her build'de okunuyor.
+  static final _whitespace = RegExp(r'\s+');
+
   /// Profil ekranındaki avatar için baş harfler.
   String get initials {
-    final parts = name
-        .trim()
-        .split(RegExp(r'\s+'))
-        .where((p) => p.isNotEmpty)
-        .toList();
+    final parts =
+        name.trim().split(_whitespace).where((p) => p.isNotEmpty).toList();
 
     if (parts.isEmpty) return '?';
     if (parts.length == 1) return parts.first.substring(0, 1).toUpperCase();
@@ -164,13 +165,12 @@ enum FlowLevel {
   final String wireValue;
   final String label;
 
-  static FlowLevel? fromJson(String? value) {
-    if (value == null) return null;
-    for (final level in FlowLevel.values) {
-      if (level.wireValue.toLowerCase() == value.toLowerCase()) return level;
-    }
-    return null;
-  }
+  static final _byWireValue = {
+    for (final level in FlowLevel.values) level.wireValue.toLowerCase(): level,
+  };
+
+  static FlowLevel? fromJson(String? value) =>
+      value == null ? null : _byWireValue[value.toLowerCase()];
 }
 
 enum BloodColorOption {
@@ -186,13 +186,13 @@ enum BloodColorOption {
   final String wireValue;
   final String label;
 
-  static BloodColorOption? fromJson(String? value) {
-    if (value == null) return null;
-    for (final option in BloodColorOption.values) {
-      if (option.wireValue.toLowerCase() == value.toLowerCase()) return option;
-    }
-    return null;
-  }
+  static final _byWireValue = {
+    for (final option in BloodColorOption.values)
+      option.wireValue.toLowerCase(): option,
+  };
+
+  static BloodColorOption? fromJson(String? value) =>
+      value == null ? null : _byWireValue[value.toLowerCase()];
 }
 
 /// Adet kaydı ekranındaki tek bir belirti çipi.
@@ -393,15 +393,138 @@ class PhaseToday {
 }
 
 class ContentItem {
-  const ContentItem({required this.title, required this.body});
+  const ContentItem({
+    required this.id,
+    required this.title,
+    required this.body,
+    this.durationMinutes,
+  });
 
   factory ContentItem.fromJson(Map<String, dynamic> json) => ContentItem(
+        id: json['id'] as int,
         title: json['title'] as String,
         body: json['body'] as String,
+        durationMinutes: json['durationMinutes'] as int?,
       );
 
+  /// Geri bildirim uç noktasının anahtarı.
+  final int id;
   final String title;
   final String body;
+
+  /// Yaklaşık süre; yalnızca hareket önerilerinde dolu.
+  final int? durationMinutes;
+}
+
+/// Bir öneriye verilen tepki. Backend'de tek uca (`POST
+/// /content/{id}/feedback`) gider; "tamamladım" beğeniden ayrı bir eksen
+/// olduğu için burada da ayrı tutulur.
+enum ContentReaction { liked, disliked }
+
+/// Zevk anketinin gruplanması: kullanıcıya 24 çip tek yığın hâlinde
+/// gösterilmesin diye.
+enum TasteTagGroup {
+  food('Neleri yemeyi seversin?'),
+  exercise('Hangi hareketler sana iyi gelir?');
+
+  const TasteTagGroup(this.title);
+
+  final String title;
+}
+
+/// Öneri motorunun öğrendiği zevk etiketleri. Wire değerleri backend'deki
+/// `TasteTag` adlarıdır; enum sıralaması wire'a girmez.
+enum TasteTagOption {
+  leafyGreens('LeafyGreens', 'Yeşil yapraklılar', TasteTagGroup.food),
+  legumes('Legumes', 'Baklagiller', TasteTagGroup.food),
+  wholeGrains('WholeGrains', 'Tam tahıllar', TasteTagGroup.food),
+  redMeat('RedMeat', 'Kırmızı et', TasteTagGroup.food),
+  poultry('Poultry', 'Beyaz et', TasteTagGroup.food),
+  fish('Fish', 'Balık', TasteTagGroup.food),
+  eggs('Eggs', 'Yumurta', TasteTagGroup.food),
+  dairy('Dairy', 'Süt ürünleri', TasteTagGroup.food),
+  nutsAndSeeds('NutsAndSeeds', 'Kuruyemiş ve tohum', TasteTagGroup.food),
+  fruit('Fruit', 'Meyve', TasteTagGroup.food),
+  vegetables('Vegetables', 'Sebze', TasteTagGroup.food),
+  fermented('Fermented', 'Fermente', TasteTagGroup.food),
+  sweet('Sweet', 'Tatlı', TasteTagGroup.food),
+  spicy('Spicy', 'Baharatlı', TasteTagGroup.food),
+  lightSoup('LightSoup', 'Hafif çorba', TasteTagGroup.food),
+  yoga('Yoga', 'Yoga', TasteTagGroup.exercise),
+  pilates('Pilates', 'Pilates', TasteTagGroup.exercise),
+  cardio('Cardio', 'Kardiyo', TasteTagGroup.exercise),
+  strength('Strength', 'Kuvvet', TasteTagGroup.exercise),
+  hiit('Hiit', 'HIIT', TasteTagGroup.exercise),
+  walking('Walking', 'Yürüyüş', TasteTagGroup.exercise),
+  stretching('Stretching', 'Esneme', TasteTagGroup.exercise),
+  dance('Dance', 'Dans', TasteTagGroup.exercise),
+  outdoor('Outdoor', 'Açık hava', TasteTagGroup.exercise);
+
+  const TasteTagOption(this.wireValue, this.label, this.group);
+
+  final String wireValue;
+  final String label;
+  final TasteTagGroup group;
+
+  /// Onboarding her build'de grupları soruyor; tarama bir kez yapılıp
+  /// sonuç saklanıyor.
+  static final Map<TasteTagGroup, List<TasteTagOption>> _byGroup = {
+    for (final group in TasteTagGroup.values)
+      group: [
+        for (final option in TasteTagOption.values)
+          if (option.group == group) option,
+      ],
+  };
+
+  static List<TasteTagOption> inGroup(TasteTagGroup group) =>
+      _byGroup[group] ?? const [];
+}
+
+enum AvoidFlagGroup {
+  diet('Yiyemediklerin ya da tercih etmediklerin'),
+  health('Dikkat etmen gerekenler'),
+  equipment('Elinde olmayan ekipmanlar');
+
+  const AvoidFlagGroup(this.title);
+
+  final String title;
+}
+
+/// Kesin bilinen kısıtlar. Bunlar öğrenilmez: işaretlenen her bayrak,
+/// ilgili önerileri liste hiç kurulmadan aday kümesinden çıkarır.
+enum AvoidFlagOption {
+  gluten('Gluten', 'Gluten', AvoidFlagGroup.diet),
+  lactose('Lactose', 'Laktoz', AvoidFlagGroup.diet),
+  treeNuts('TreeNuts', 'Fındık ve fıstık', AvoidFlagGroup.diet),
+  shellfish('Shellfish', 'Kabuklu deniz ürünleri', AvoidFlagGroup.diet),
+  eggAllergy('EggAllergy', 'Yumurta', AvoidFlagGroup.diet),
+  vegetarian('Vegetarian', 'Vejetaryen', AvoidFlagGroup.diet),
+  vegan('Vegan', 'Vegan', AvoidFlagGroup.diet),
+  knee('Knee', 'Diz', AvoidFlagGroup.health),
+  back('Back', 'Bel', AvoidFlagGroup.health),
+  shoulder('Shoulder', 'Omuz', AvoidFlagGroup.health),
+  pregnancy('Pregnancy', 'Hamilelik', AvoidFlagGroup.health),
+  equipmentDumbbell('EquipmentDumbbell', 'Dambıl', AvoidFlagGroup.equipment),
+  equipmentMat('EquipmentMat', 'Mat', AvoidFlagGroup.equipment),
+  equipmentGym('EquipmentGym', 'Spor salonu', AvoidFlagGroup.equipment);
+
+  const AvoidFlagOption(this.wireValue, this.label, this.group);
+
+  final String wireValue;
+  final String label;
+  final AvoidFlagGroup group;
+
+  /// Bkz. [TasteTagOption.inGroup]: gruplama bir kez hesaplanıyor.
+  static final Map<AvoidFlagGroup, List<AvoidFlagOption>> _byGroup = {
+    for (final group in AvoidFlagGroup.values)
+      group: [
+        for (final option in AvoidFlagOption.values)
+          if (option.group == group) option,
+      ],
+  };
+
+  static List<AvoidFlagOption> inGroup(AvoidFlagGroup group) =>
+      _byGroup[group] ?? const [];
 }
 
 class PhaseContent {

@@ -17,13 +17,9 @@ public class PhaseController(IPhaseService phaseService) : ApiControllerBase
     [ProducesResponseType(typeof(PhaseTodayResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<PhaseTodayResponse>> GetToday(
-        CancellationToken cancellationToken)
-    {
-        var result =
-            await phaseService.GetTodayAsync(CurrentUserId, cancellationToken);
-
-        return result.IsSuccess ? Ok(result.Value) : Problem(result);
-    }
+        CancellationToken cancellationToken) =>
+        OkOrProblem(
+            await phaseService.GetTodayAsync(CurrentUserId, cancellationToken));
 
     /// <summary>
     /// Aylık takvim: verilen ayın her günü için faz, adet günü tahmini ve
@@ -37,11 +33,7 @@ public class PhaseController(IPhaseService phaseService) : ApiControllerBase
     public async Task<ActionResult<CalendarMonthResponse>> GetCalendar(
         [FromQuery] int year,
         [FromQuery] int month,
-        CancellationToken cancellationToken)
-    {
-        var result = await phaseService.GetMonthAsync(
-            CurrentUserId, year, month, cancellationToken);
-
-        return result.IsSuccess ? Ok(result.Value) : Problem(result);
-    }
+        CancellationToken cancellationToken) =>
+        OkOrProblem(await phaseService.GetMonthAsync(
+            CurrentUserId, year, month, cancellationToken));
 }

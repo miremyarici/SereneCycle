@@ -165,10 +165,19 @@ namespace SereneCycle.Infrastructure.Persistence.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
 
+                    b.Property<long>("ContraMask")
+                        .HasColumnType("bigint");
+
+                    b.Property<int?>("DurationMinutes")
+                        .HasColumnType("integer");
+
                     b.Property<string>("Phase")
                         .IsRequired()
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
+
+                    b.Property<long>("TagMask")
+                        .HasColumnType("bigint");
 
                     b.Property<string>("Title")
                         .IsRequired()
@@ -565,6 +574,27 @@ namespace SereneCycle.Infrastructure.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("SereneCycle.Domain.Entities.UserTasteProfile", b =>
+                {
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.PrimitiveCollection<short[]>("Alpha")
+                        .IsRequired()
+                        .HasColumnType("smallint[]");
+
+                    b.PrimitiveCollection<short[]>("Beta")
+                        .IsRequired()
+                        .HasColumnType("smallint[]");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("UserId");
+
+                    b.ToTable("user_taste_profiles", (string)null);
+                });
+
             modelBuilder.Entity("SereneCycle.Infrastructure.Identity.AppUser", b =>
                 {
                     b.Property<Guid>("Id")
@@ -588,6 +618,9 @@ namespace SereneCycle.Infrastructure.Persistence.Migrations
 
                     b.Property<int>("AvgPeriodLength")
                         .HasColumnType("integer");
+
+                    b.Property<long>("AvoidMask")
+                        .HasColumnType("bigint");
 
                     b.Property<string>("ConcurrencyStamp")
                         .IsConcurrencyToken()
@@ -785,6 +818,15 @@ namespace SereneCycle.Infrastructure.Persistence.Migrations
                     b.Navigation("Log");
 
                     b.Navigation("Symptom");
+                });
+
+            modelBuilder.Entity("SereneCycle.Domain.Entities.UserTasteProfile", b =>
+                {
+                    b.HasOne("SereneCycle.Infrastructure.Identity.AppUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("SereneCycle.Infrastructure.Identity.RefreshToken", b =>

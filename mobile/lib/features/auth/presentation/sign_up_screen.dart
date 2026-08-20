@@ -5,11 +5,16 @@ import 'package:go_router/go_router.dart';
 import '../../../core/api/api_client.dart';
 import '../../../core/providers/app_providers.dart';
 import '../../../core/router/route_paths.dart';
-import '../../../core/theme/app_colors.dart';
+import '../../../core/validation/email_validator.dart';
 import '../../../core/validation/password_validator.dart';
+import '../../../core/widgets/app_snack_bar.dart';
 import '../../../core/widgets/pill_button.dart';
 import '../../../core/widgets/soft_shadow_card.dart';
 import '../../../core/widgets/underlined_text_field.dart';
+import 'widgets/auth_header.dart';
+import 'widgets/auth_page.dart';
+import 'widgets/auth_prompt.dart';
+import 'widgets/password_field.dart';
 
 class SignUpScreen extends ConsumerStatefulWidget {
   const SignUpScreen({super.key});
@@ -23,7 +28,6 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
-  bool _obscurePassword = true;
   bool _isLoading = false;
 
   @override
@@ -49,14 +53,7 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
 
       if (mounted) context.push(RoutePaths.verifyCode, extra: email);
     } on ApiException catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(e.message),
-            backgroundColor: AppColors.error,
-          ),
-        );
-      }
+      if (mounted) context.showError(e.message);
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -64,147 +61,97 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => context.pop(),
-        ),
-        title: const Text(
-          'Serene Cycle',
-          style: TextStyle(
-            fontSize: 24,
-            fontWeight: FontWeight.w600,
-            color: AppColors.primary,
-          ),
-        ),
-        centerTitle: true,
-      ),
-      body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 448),
-              child: SoftShadowCard(
-                padding: const EdgeInsets.all(24),
-                child: Form(
-                  key: _formKey,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      const Text(
-                        'Yolculuğuna başla',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 24,
-                          height: 32 / 24,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.onSurface,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      const Text(
-                        'Kendini tanımak için sakin bir alan oluştur.',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 16,
-                          height: 24 / 16,
-                          color: AppColors.onSurfaceVariant,
-                        ),
-                      ),
-                      const SizedBox(height: 32),
-                      UnderlinedTextField(
-                        label: 'Tercih ettiğin isim',
-                        controller: _nameController,
-                        hintText: 'Örn. Elif',
-                        textInputAction: TextInputAction.next,
-                        autofillHints: const [AutofillHints.name],
-                        validator: (value) =>
-                            (value == null || value.trim().isEmpty)
-                                ? 'İsim gerekli'
-                                : null,
-                      ),
-                      const SizedBox(height: 20),
-                      UnderlinedTextField(
-                        label: 'E-posta adresi',
-                        controller: _emailController,
-                        hintText: 'sen@ornek.com',
-                        keyboardType: TextInputType.emailAddress,
-                        textInputAction: TextInputAction.next,
-                        autofillHints: const [AutofillHints.email],
-                        validator: (value) {
-                          if (value == null || value.trim().isEmpty) {
-                            return 'E-posta gerekli';
-                          }
-                          if (!value.contains('@')) {
-                            return 'Geçerli bir e-posta gir';
-                          }
-                          return null;
-                        },
-                      ),
-                      const SizedBox(height: 20),
-                      UnderlinedTextField(
-                        label: 'Şifre',
-                        controller: _passwordController,
-                        hintText: '••••••••',
-                        obscureText: _obscurePassword,
-                        textInputAction: TextInputAction.done,
-                        autofillHints: const [AutofillHints.newPassword],
-                        suffixIcon: IconButton(
-                          icon: Icon(
-                            _obscurePassword
-                                ? Icons.visibility_off_outlined
-                                : Icons.visibility_outlined,
-                            size: 20,
-                            color: AppColors.outline,
-                          ),
-                          onPressed: () => setState(
-                            () => _obscurePassword = !_obscurePassword,
-                          ),
-                        ),
-                        validator: validatePassword,
-                      ),
-                      const SizedBox(height: 32),
-                      PillButton(
-                        label: 'Hesap Oluştur',
-                        onPressed: _submit,
-                        isLoading: _isLoading,
-                        trailingIcon: Icons.arrow_forward,
-                      ),
-                      const SizedBox(height: 24),
-                      Wrap(
-                        alignment: WrapAlignment.center,
-                        crossAxisAlignment: WrapCrossAlignment.center,
-                        children: [
-                          const Text(
-                            'Zaten hesabın var mı? ',
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: AppColors.onSurfaceVariant,
-                            ),
-                          ),
-                          GestureDetector(
-                            onTap: () => context.go(RoutePaths.login),
-                            child: const Text(
-                              'Giriş yap',
-                              style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600,
-                                color: AppColors.primary,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
+    return AuthPage(
+      hasBackButton: true,
+      title: 'Serene Cycle',
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+      child: SoftShadowCard(
+        padding: const EdgeInsets.all(24),
+        child: _SignUpForm(
+          formKey: _formKey,
+          nameController: _nameController,
+          emailController: _emailController,
+          passwordController: _passwordController,
+          isLoading: _isLoading,
+          onSubmit: _submit,
         ),
       ),
     );
   }
+}
+
+/// Kayıt formu: isim, e-posta, parola ve giriş bağlantısı.
+class _SignUpForm extends StatelessWidget {
+  const _SignUpForm({
+    required this.formKey,
+    required this.nameController,
+    required this.emailController,
+    required this.passwordController,
+    required this.isLoading,
+    required this.onSubmit,
+  });
+
+  final GlobalKey<FormState> formKey;
+  final TextEditingController nameController;
+  final TextEditingController emailController;
+  final TextEditingController passwordController;
+  final bool isLoading;
+  final VoidCallback onSubmit;
+
+  @override
+  Widget build(BuildContext context) => Form(
+        key: formKey,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const AuthHeader(
+              title: 'Yolculuğuna başla',
+              subtitle: 'Kendini tanımak için sakin bir alan oluştur.',
+            ),
+            const SizedBox(height: 32),
+            UnderlinedTextField(
+              label: 'Tercih ettiğin isim',
+              controller: nameController,
+              hintText: 'Örn. Elif',
+              textInputAction: TextInputAction.next,
+              autofillHints: const [AutofillHints.name],
+              validator: (value) => (value == null || value.trim().isEmpty)
+                  ? 'İsim gerekli'
+                  : null,
+            ),
+            const SizedBox(height: 20),
+            UnderlinedTextField(
+              label: 'E-posta adresi',
+              controller: emailController,
+              hintText: 'sen@ornek.com',
+              keyboardType: TextInputType.emailAddress,
+              textInputAction: TextInputAction.next,
+              autofillHints: const [AutofillHints.email],
+              validator: validateEmail,
+            ),
+            const SizedBox(height: 20),
+            PasswordField(
+              label: 'Şifre',
+              controller: passwordController,
+              textInputAction: TextInputAction.done,
+              autofillHints: const [AutofillHints.newPassword],
+              validator: validatePassword,
+            ),
+            const SizedBox(height: 32),
+            PillButton(
+              label: 'Hesap Oluştur',
+              onPressed: onSubmit,
+              isLoading: isLoading,
+              trailingIcon: Icons.arrow_forward,
+            ),
+            const SizedBox(height: 24),
+            AuthPrompt(
+              question: 'Zaten hesabın var mı? ',
+              actionLabel: 'Giriş yap',
+              isUnderlined: false,
+              onTap: () => context.go(RoutePaths.login),
+            ),
+          ],
+        ),
+      );
 }

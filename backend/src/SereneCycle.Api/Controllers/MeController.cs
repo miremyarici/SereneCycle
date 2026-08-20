@@ -14,13 +14,9 @@ public class MeController(IProfileService profileService) : ApiControllerBase
     [ProducesResponseType(typeof(UserSummary), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<UserSummary>> Get(
-        CancellationToken cancellationToken)
-    {
-        var result =
-            await profileService.GetAsync(CurrentUserId, cancellationToken);
-
-        return result.IsSuccess ? Ok(result.Value) : Problem(result);
-    }
+        CancellationToken cancellationToken) =>
+        OkOrProblem(
+            await profileService.GetAsync(CurrentUserId, cancellationToken));
 
     /// <summary>
     /// Profil ve döngü ayarlarını günceller. Onboarding sihirbazı da bunu
@@ -31,13 +27,9 @@ public class MeController(IProfileService profileService) : ApiControllerBase
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<ActionResult<UserSummary>> Update(
         UpdateProfileRequest request,
-        CancellationToken cancellationToken)
-    {
-        var result = await profileService.UpdateAsync(
-            CurrentUserId, request, cancellationToken);
-
-        return result.IsSuccess ? Ok(result.Value) : Problem(result);
-    }
+        CancellationToken cancellationToken) =>
+        OkOrProblem(await profileService.UpdateAsync(
+            CurrentUserId, request, cancellationToken));
 
     // --- Profil fotoğrafı --------------------------------------------------
 
@@ -48,12 +40,14 @@ public class MeController(IProfileService profileService) : ApiControllerBase
     [HttpGet("avatar")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetAvatar(
+    public async Task<ActionResult> GetAvatar(
         CancellationToken cancellationToken)
     {
         var result =
             await profileService.GetAvatarAsync(CurrentUserId, cancellationToken);
 
+        // Tek istisna: gövde JSON değil ham bayt, bu yüzden ortak
+        // OkOrProblem dönüşümü kullanılamıyor.
         return result.IsSuccess
             ? File(result.Value!.Data, result.Value.ContentType)
             : Problem(result);
@@ -64,24 +58,16 @@ public class MeController(IProfileService profileService) : ApiControllerBase
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<ActionResult<UserSummary>> UpdateAvatar(
         UpdateAvatarRequest request,
-        CancellationToken cancellationToken)
-    {
-        var result = await profileService.UpdateAvatarAsync(
-            CurrentUserId, request, cancellationToken);
-
-        return result.IsSuccess ? Ok(result.Value) : Problem(result);
-    }
+        CancellationToken cancellationToken) =>
+        OkOrProblem(await profileService.UpdateAvatarAsync(
+            CurrentUserId, request, cancellationToken));
 
     [HttpDelete("avatar")]
     [ProducesResponseType(typeof(UserSummary), StatusCodes.Status200OK)]
     public async Task<ActionResult<UserSummary>> RemoveAvatar(
-        CancellationToken cancellationToken)
-    {
-        var result = await profileService.RemoveAvatarAsync(
-            CurrentUserId, cancellationToken);
-
-        return result.IsSuccess ? Ok(result.Value) : Problem(result);
-    }
+        CancellationToken cancellationToken) =>
+        OkOrProblem(await profileService.RemoveAvatarAsync(
+            CurrentUserId, cancellationToken));
 
     // --- E-posta ve şifre --------------------------------------------------
 
@@ -94,40 +80,28 @@ public class MeController(IProfileService profileService) : ApiControllerBase
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status409Conflict)]
-    public async Task<IActionResult> RequestEmailChange(
+    public async Task<ActionResult> RequestEmailChange(
         ChangeEmailRequest request,
-        CancellationToken cancellationToken)
-    {
-        var result = await profileService.RequestEmailChangeAsync(
-            CurrentUserId, request, cancellationToken);
-
-        return result.IsSuccess ? NoContent() : Problem(result);
-    }
+        CancellationToken cancellationToken) =>
+        NoContentOrProblem(await profileService.RequestEmailChangeAsync(
+            CurrentUserId, request, cancellationToken));
 
     [HttpPost("email/confirm")]
     [ProducesResponseType(typeof(UserSummary), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<ActionResult<UserSummary>> ConfirmEmailChange(
         ConfirmEmailChangeRequest request,
-        CancellationToken cancellationToken)
-    {
-        var result = await profileService.ConfirmEmailChangeAsync(
-            CurrentUserId, request, cancellationToken);
-
-        return result.IsSuccess ? Ok(result.Value) : Problem(result);
-    }
+        CancellationToken cancellationToken) =>
+        OkOrProblem(await profileService.ConfirmEmailChangeAsync(
+            CurrentUserId, request, cancellationToken));
 
     [HttpPost("password")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-    public async Task<IActionResult> ChangePassword(
+    public async Task<ActionResult> ChangePassword(
         ChangePasswordRequest request,
-        CancellationToken cancellationToken)
-    {
-        var result = await profileService.ChangePasswordAsync(
-            CurrentUserId, request, cancellationToken);
-
-        return result.IsSuccess ? NoContent() : Problem(result);
-    }
+        CancellationToken cancellationToken) =>
+        NoContentOrProblem(await profileService.ChangePasswordAsync(
+            CurrentUserId, request, cancellationToken));
 }

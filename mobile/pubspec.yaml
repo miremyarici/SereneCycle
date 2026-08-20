@@ -84,6 +84,17 @@ flutter:
   # For details regarding adding assets from package dependencies, see
   # https://flutter.dev/to/asset-from-package
 
+  fonts:
+    # Merriweather (SIL OFL, lisans: assets/fonts/OFL.txt) uygulamayla
+    # paketleniyor: başlıklar çevrimdışı cihazda ve widget testlerinde de
+    # aynı şekilde çözülsün diye çalışma zamanında indirme yapılmıyor.
+    - family: Merriweather
+      fonts:
+        - asset: assets/fonts/Merriweather-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/Merriweather-Bold.ttf
+          weight: 700
+
   # To add custom fonts to your application, add a fonts section here,
   # in this "flutter" section. Each entry in this list should have a
   # "family" key with the font family name, and a "fonts" key with a

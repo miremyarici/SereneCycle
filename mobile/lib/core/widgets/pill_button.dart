@@ -20,6 +20,11 @@ class PillButton extends StatelessWidget {
   final bool isLoading;
   final IconData? trailingIcon;
 
+  static const _trailingIconSize = 18.0;
+  static const _spinnerSize = 20.0;
+  static const _spinnerStrokeWidth = 2.0;
+  static const _disabledOpacity = 0.6;
+
   @override
   Widget build(BuildContext context) {
     final background =
@@ -34,34 +39,29 @@ class PillButton extends StatelessWidget {
         style: FilledButton.styleFrom(
           backgroundColor: background,
           foregroundColor: foreground,
-          disabledBackgroundColor: background.withValues(alpha: 0.6),
+          disabledBackgroundColor:
+              background.withValues(alpha: _disabledOpacity),
           shape: const StadiumBorder(),
           padding: const EdgeInsets.symmetric(vertical: 16),
         ),
         child: isLoading
             ? SizedBox(
-                height: 20,
-                width: 20,
+                height: _spinnerSize,
+                width: _spinnerSize,
                 child: CircularProgressIndicator(
-                  strokeWidth: 2,
+                  strokeWidth: _spinnerStrokeWidth,
                   color: foreground,
                 ),
               )
             : Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Text(
-                    label,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      height: 20 / 14,
-                      letterSpacing: 0.14,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
+                  // Yazı tipi ve rengi FilledButton'ın kendi metin stilinden
+                  // (tema `labelLarge` + `foregroundColor`) geliyor.
+                  Text(label),
                   if (trailingIcon != null) ...[
                     const SizedBox(width: 8),
-                    Icon(trailingIcon, size: 18),
+                    Icon(trailingIcon, size: _trailingIconSize),
                   ],
                 ],
               ),

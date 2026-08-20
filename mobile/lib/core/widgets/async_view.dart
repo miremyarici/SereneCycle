@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../theme/app_colors.dart';
+import '../theme/app_typography.dart';
 
 /// Yükleme/hata/veri üçlüsünü tek yerde ele alır; her ekranda aynı
 /// hata görünümü ve "Tekrar dene" davranışı olsun diye.
@@ -52,11 +53,8 @@ class _ErrorView extends StatelessWidget {
               Text(
                 message,
                 textAlign: TextAlign.center,
-                style: const TextStyle(
-                  fontSize: 16,
-                  height: 24 / 16,
-                  color: AppColors.onSurfaceVariant,
-                ),
+                style: context.text.bodyLarge
+                    ?.copyWith(color: AppColors.onSurfaceVariant),
               ),
               const SizedBox(height: 20),
               OutlinedButton.icon(
