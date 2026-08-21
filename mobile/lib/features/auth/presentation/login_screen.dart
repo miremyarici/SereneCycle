@@ -8,6 +8,7 @@ import '../../../core/router/route_paths.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/validation/email_validator.dart';
+import '../../../core/widgets/app_logo.dart';
 import '../../../core/widgets/app_snack_bar.dart';
 import '../../../core/widgets/pill_button.dart';
 import '../../../core/widgets/soft_shadow_card.dart';
@@ -43,20 +44,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     setState(() => _isLoading = true);
 
     try {
+      // Giriş sonrası yönlendirmeyi router üstleniyor: "onboarding bitti mi"
+      // sorusunun tek cevaplandığı yer orası.
       await ref.read(authControllerProvider.notifier).signIn(
             _emailController.text.trim(),
             _passwordController.text,
           );
-
-      final user = ref.read(authControllerProvider);
-
-      if (mounted) {
-        context.go(
-          (user?.hasCompletedOnboarding ?? false)
-              ? RoutePaths.home
-              : RoutePaths.onboarding,
-        );
-      }
     } on ApiException catch (e) {
       if (mounted) context.showError(e.message);
     } finally {
@@ -160,21 +153,13 @@ class _LoginForm extends StatelessWidget {
       );
 }
 
-/// Giriş ekranının tepesindeki uygulama adı.
+/// Giriş ekranının tepesindeki uygulama logosu.
 class _Wordmark extends StatelessWidget {
   const _Wordmark();
 
-  static const _letterSpacing = -0.64;
-
   @override
-  Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.only(bottom: 32),
-        child: Text(
-          'Serene Cycle',
-          style: context.text.displayMedium?.copyWith(
-            letterSpacing: _letterSpacing,
-            color: AppColors.primary,
-          ),
-        ),
+  Widget build(BuildContext context) => const Padding(
+        padding: EdgeInsets.only(bottom: 32),
+        child: AppLogo(),
       );
 }

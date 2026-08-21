@@ -29,6 +29,8 @@ widget/veritabanı olmadan test edilebiliyor.
 | POST | `/auth/refresh` | Token yeniler (rotation) |
 | GET | `/me` | Profil + döngü ayarları |
 | PUT | `/me` | Profil/ayar günceller, onboarding'i tamamlar |
+| DELETE | `/me` | Hesabı ve ona bağlı bütün veriyi kalıcı olarak siler |
+| GET | `/me/export` | Kullanıcının bütün verisi tek bir JSON belgesinde |
 | GET | `/phase/today` | Ana sayfa: faz, ilerleme, takvim şeridi |
 
 Swagger UI: geliştirme ortamında `/swagger`.
@@ -181,6 +183,20 @@ kayan ortalama) burada korunuyor.
 - Kod deneme sayısı sınırlıdır (5), Identity kilitleme açıktır.
 - `Jwt:SigningKey` asla `appsettings.json`'a yazılmaz.
 
-Menstrüel veri KVKK kapsamında **özel nitelikli kişisel veridir**.
-Uygulama yayınlanacaksa veri saklama/silme politikası ve gizlilik
-metni bu doğrultuda gözden geçirilmelidir.
+## KVKK
+
+Menstrüel veri KVKK kapsamında **özel nitelikli kişisel veridir**. İki hak
+uçlarla karşılanıyor:
+
+- **Veri taşınabilirliği** — `GET /me/export` profili, bütün döngüleri, gün
+  kayıtlarını (semptomlar kimlikle değil adla) ve öneri motorunun öğrendiği
+  zevk tahminlerini tek bir JSON belgesinde döner. Profil fotoğrafı
+  belgeye gömülmez, `GET /me/avatar` ile ayrıca indirilir.
+- **Unutulma** — `DELETE /me` hesabı ve ona bağlı her şeyi siler. Geri
+  alınamaz olduğu için mevcut şifre istenir. Döngü ve gün kayıtları
+  kullanıcıya yabancı anahtarla bağlı olmadığından (`UserId` düz bir kolon)
+  tek bir işlem içinde açıkça silinir; refresh token'lar, zevk profili ve
+  Identity kayıtları kullanıcı satırının kaskadıyla gider.
+
+Uygulama yayınlanacaksa saklama süresi politikası ve gizlilik metni de bu
+doğrultuda yazılmalıdır.

@@ -14,6 +14,7 @@ import 'package:serene_cycle/features/home/presentation/home_screen.dart';
 import 'package:serene_cycle/features/logs/presentation/period_log_screen.dart';
 import 'package:serene_cycle/features/nutrition/presentation/nutrition_screen.dart';
 import 'package:serene_cycle/features/profile/presentation/cycle_settings_screen.dart';
+import 'package:serene_cycle/features/profile/presentation/privacy_screen.dart';
 import 'package:serene_cycle/features/profile/presentation/profile_screen.dart';
 
 /// Risk kartının "temiz" hali: işaret yok, yalnızca sayılar.
@@ -686,4 +687,102 @@ void main() {
     // Boş liste artık "içerik eklenmedi" demiyor: sebebi süre kısıtı.
     expect(find.textContaining('15 dakikaya sığan'), findsOneWidget);
   });
+
+  testWidgets('Gizlilik ekranı dışa aktarımın özetini gösterir', (
+    tester,
+  ) async {
+    _useTallScreen(tester);
+
+    final api = _ExportOnlyApi();
+
+    await _pump(
+      tester,
+      ProviderScope(
+        overrides: [sereneApiProvider.overrideWithValue(api)],
+        child: _app(const PrivacyScreen()),
+      ),
+    );
+
+    // Veri istenmeden çekilmiyor: dışa aktarım kullanıcının bilinçli bir
+    // eylemi olmalı.
+    expect(api.exportCount, 0);
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Verilerimi hazırla'));
+    await tester.pumpAndSettle();
+
+    expect(api.exportCount, 1);
+    expect(find.text('Döngü kaydı'), findsOneWidget);
+    expect(find.text('2'), findsOneWidget);
+    expect(find.text('Gün kaydı'), findsOneWidget);
+    expect(find.text('3'), findsOneWidget);
+    expect(find.widgetWithText(FilledButton, 'Panoya kopyala'), findsOneWidget);
+  });
+
+  testWidgets('Hesap silme parola sorulmadan gerçekleşmez', (tester) async {
+    _useTallScreen(tester);
+
+    final api = _ExportOnlyApi();
+
+    await _pump(
+      tester,
+      ProviderScope(
+        overrides: [sereneApiProvider.overrideWithValue(api)],
+        child: _app(const PrivacyScreen()),
+      ),
+    );
+
+    await tester.tap(find.text('Hesabımı kalıcı olarak sil'));
+    await tester.pumpAndSettle();
+
+    // Onay pop-up'ı: boş parolayla gönderilirse istek hiç çıkmamalı.
+    expect(find.text('Hesabını sil'), findsOneWidget);
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Kalıcı olarak sil'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Parola gerekli'), findsOneWidget);
+    expect(api.deletedWithPassword, isNull);
+  });
 }
+
+/// Gizlilik ekranının dokunduğu iki ucu taklit eder.
+class _ExportOnlyApi implements SereneApi {
+  int exportCount = 0;
+  String? deletedWithPassword;
+
+  @override
+  Future<UserDataExport> exportMyData() async {
+    exportCount++;
+    return UserDataExport.fromJson(_exportJson);
+  }
+
+  @override
+  Future<void> deleteAccount(String currentPassword) async {
+    deletedWithPassword = currentPassword;
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => throw UnsupportedError(
+        'Test bu çağrıyı beklemiyor: ${invocation.memberName}',
+      );
+}
+
+final _exportJson = <String, dynamic>{
+  'format': 'serene-cycle-export-v1',
+  'exportedAt': '2026-08-21T09:00:00Z',
+  'profile': _userJson,
+  'cycles': [
+    {'startDate': '2026-07-10', 'endDate': '2026-08-07', 'lengthInDays': 28},
+    {'startDate': '2026-08-07', 'endDate': null, 'lengthInDays': null},
+  ],
+  'dailyLogs': [
+    {'date': '2026-08-07', 'hasBleeding': true, 'symptoms': <String>[]},
+    {'date': '2026-08-08', 'hasBleeding': true, 'symptoms': <String>[]},
+    {'date': '2026-08-09', 'hasBleeding': false, 'symptoms': <String>[]},
+  ],
+  'preferences': {
+    'avoidFlags': ['Vegan'],
+    'learnedTastes': <Map<String, dynamic>>[],
+  },
+  'notice': 'Bu dosya bütün kişisel verilerini içerir.',
+};

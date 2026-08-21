@@ -2,6 +2,8 @@
 /// JsonStringEnumConverter ile metin olarak gönderiyor.
 library;
 
+import 'dart:convert';
+
 enum CyclePhase {
   menstrual,
   follicular,
@@ -88,6 +90,45 @@ class AuthResponse {
   final String accessToken;
   final String refreshToken;
   final UserSummary user;
+}
+
+/// `GET /me/export` yanıtı: kullanıcının sunucudaki bütün verisi.
+///
+/// Belge alan alan eşlenmiyor, olduğu gibi taşınıyor: dışa aktarımın amacı
+/// veriyi eksiksiz teslim etmek. Alan alan eşleseydik sunucuya eklenen her
+/// yeni alan, istemci güncellenene kadar dosyadan sessizce düşerdi.
+class UserDataExport {
+  const UserDataExport({
+    required this.raw,
+    required this.exportedAt,
+    required this.cycleCount,
+    required this.dailyLogCount,
+  });
+
+  factory UserDataExport.fromJson(Map<String, dynamic> json) => UserDataExport(
+        raw: json,
+        exportedAt: DateTime.parse(json['exportedAt'] as String),
+        cycleCount: (json['cycles'] as List<dynamic>?)?.length ?? 0,
+        dailyLogCount: (json['dailyLogs'] as List<dynamic>?)?.length ?? 0,
+      );
+
+  final Map<String, dynamic> raw;
+  final DateTime exportedAt;
+
+  /// Ekranda gösterilen özet: kullanıcı dosyayı açmadan ne indirdiğini
+  /// görebilsin.
+  final int cycleCount;
+  final int dailyLogCount;
+
+  /// Dosyaya yazılan ve panoya kopyalanan hâli. Girintili: dışa aktarım
+  /// yalnızca makineler için değil, kullanıcının kendisi için de.
+  String toPrettyJson() => const JsonEncoder.withIndent('  ').convert(raw);
+
+  /// Tarih dosya adında: arka arkaya alınan dışa aktarımlar birbirinin
+  /// üzerine yazmasın.
+  String get fileName =>
+      'serene-cycle-verilerim-'
+      '${exportedAt.toIso8601String().substring(0, 10)}.json';
 }
 
 class CalendarDay {

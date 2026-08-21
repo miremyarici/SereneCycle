@@ -7,6 +7,7 @@ import '../../../core/providers/app_providers.dart';
 import '../../../core/router/route_paths.dart';
 import '../../../core/validation/email_validator.dart';
 import '../../../core/validation/password_validator.dart';
+import '../../../core/widgets/app_logo.dart';
 import '../../../core/widgets/app_snack_bar.dart';
 import '../../../core/widgets/pill_button.dart';
 import '../../../core/widgets/soft_shadow_card.dart';
@@ -63,7 +64,7 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
   Widget build(BuildContext context) {
     return AuthPage(
       hasBackButton: true,
-      title: 'Serene Cycle',
+      title: const AppLogo(height: 32),
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
       child: SoftShadowCard(
         padding: const EdgeInsets.all(24),

@@ -3,11 +3,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../../core/api/api_client.dart';
 import '../../../core/providers/app_providers.dart';
-import '../../../core/router/route_paths.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/widgets/app_snack_bar.dart';
@@ -96,17 +94,10 @@ class _VerifyCodeScreenState extends ConsumerState<VerifyCodeScreen> {
       final response =
           await ref.read(sereneApiProvider).verifyCode(widget.email, _code);
 
+      // Doğrulama oturumu açar; sonraki ekranı router'daki yönlendirme seçer.
       await ref
           .read(authControllerProvider.notifier)
           .completeVerification(response);
-
-      if (mounted) {
-        context.go(
-          response.user.hasCompletedOnboarding
-              ? RoutePaths.home
-              : RoutePaths.onboarding,
-        );
-      }
     } on ApiException catch (e) {
       if (mounted) context.showError(e.message);
     } finally {

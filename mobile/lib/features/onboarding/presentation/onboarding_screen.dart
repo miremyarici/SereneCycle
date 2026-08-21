@@ -1,12 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/api/api_client.dart';
 import '../../../core/api/models.dart';
 import '../../../core/providers/app_providers.dart';
-import '../../../core/router/route_paths.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/utils/period_start_picker.dart';
@@ -76,8 +74,10 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     setState(() => _isSubmitting = true);
 
     try {
+      // Ana sayfaya geçişi router üstleniyor: sihirbaz bitince oturum
+      // durumundaki `hasCompletedOnboarding` değişiyor ve yönlendirme
+      // kullanıcıyı kendiliğinden alıyor.
       await _submit();
-      if (mounted) context.go(RoutePaths.home);
     } on ApiException catch (e) {
       if (mounted) context.showError(e.message);
     } finally {
@@ -88,7 +88,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   Future<void> _submit() async {
     final api = ref.read(sereneApiProvider);
 
-    await api.updateMe(
+    final user = await api.updateMe(
       avgCycleLength: _cycleLength,
       avgPeriodLength: _periodLength,
       lastPeriodStart: _lastPeriodStart,
@@ -99,6 +99,11 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
       disliked: _tagsWith(ContentReaction.disliked),
       avoid: _avoidFlags,
     );
+
+    // İlk döngü kaydı açıldı, yani `hasCompletedOnboarding` artık true.
+    // Oturum durumu bunu duymazsa yönlendirme kullanıcıyı sihirbaza geri
+    // gönderir; yanıt elimizdeyken ikinci bir `/me` isteği gereksiz.
+    ref.read(authControllerProvider.notifier).updateUser(user);
 
     ref.invalidate(profileProvider);
     ref.invalidate(phaseTodayProvider);

@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:dio/dio.dart';
 
 import 'api_config.dart';
+import 'models.dart';
 import 'token_storage.dart';
 
 /// Sunucudan gelen hataları kullanıcıya gösterilebilir mesaja çeviren tip.
@@ -17,29 +18,45 @@ class ApiException implements Exception {
 }
 
 class ApiClient {
-  ApiClient(this._tokenStorage, {Dio? dio})
-      : _dio = dio ??
-            Dio(BaseOptions(
-              baseUrl: ApiConfig.baseUrl,
-              connectTimeout: const Duration(seconds: 10),
-              receiveTimeout: const Duration(seconds: 10),
-              // 4xx'i exception'a çevirmeyip kendimiz ele alıyoruz.
-              validateStatus: (status) => status != null && status < 500,
-            )) {
+  ApiClient(
+    this._tokenStorage, {
+    Dio? dio,
+    void Function()? onSessionExpired,
+  })  : _onSessionExpired = onSessionExpired,
+        _dio = dio ?? Dio(baseOptions) {
     _dio.interceptors.add(
       InterceptorsWrapper(onRequest: _attachToken),
     );
   }
 
+  /// Dışarıdan Dio verilirken de aynı ayarlar geçerli olmalı, bu yüzden tek
+  /// yerde. Özellikle [BaseOptions.validateStatus]: 4xx exception'a
+  /// çevrilirse [_send] 401'i hiç göremez ve token yenileme devreye girmez.
+  static BaseOptions get baseOptions => BaseOptions(
+        baseUrl: ApiConfig.baseUrl,
+        connectTimeout: const Duration(seconds: 10),
+        receiveTimeout: const Duration(seconds: 10),
+        validateStatus: (status) => status != null && status < 500,
+      );
+
   final Dio _dio;
   final TokenStorage _tokenStorage;
+
+  /// Refresh token da reddedildiğinde çağrılır: oturum gerçekten bitmiştir
+  /// ve uygulamanın kullanıcıyı giriş ekranına alması gerekir.
+  final void Function()? _onSessionExpired;
+
+  /// Süren yenileme. Aynı anda 401 alan bütün istekler bunu bekler; yoksa
+  /// beş provider aynı anda yenileme tetikler ve rotation yüzünden yalnızca
+  /// biri geçerli token alır, kalanı oturumdan düşerdi.
+  Future<bool>? _refreshInFlight;
 
   Future<void> _attachToken(
     RequestOptions options,
     RequestInterceptorHandler handler,
   ) async {
     // Auth uçları token istemez; gereksiz okuma yapmayalım.
-    if (!options.path.startsWith('/auth/')) {
+    if (!_isAuthEndpoint(options.path)) {
       final token = await _tokenStorage.readAccessToken();
       if (token != null) {
         options.headers['Authorization'] = 'Bearer $token';
@@ -78,8 +95,9 @@ class ApiClient {
     return _asJson(response.data);
   }
 
-  Future<Map<String, dynamic>?> delete(String path) async {
-    final response = await _send(() => _dio.delete<dynamic>(path));
+  /// [data]: hesap silme gibi gövde taşıyan silme istekleri için.
+  Future<Map<String, dynamic>?> delete(String path, {Object? data}) async {
+    final response = await _send(() => _dio.delete<dynamic>(path, data: data));
     return _asJson(response.data);
   }
 
@@ -103,15 +121,23 @@ class ApiClient {
       data is Map<String, dynamic> ? data : null;
 
   /// Ağ hatalarını ve 4xx yanıtlarını tek bir [ApiException]'a indirger.
+  ///
+  /// Erişim token'ı 15 dakikada dolduğu için 401 istisnai değil beklenen bir
+  /// durum: token sessizce yenilenir ve istek bir kez tekrarlanır. [request]
+  /// bir kapanış olduğu için tekrar çağrılması yeni bir istek kurar ve
+  /// interceptor tazelenmiş token'ı ekler.
   Future<Response<dynamic>> _send(
     Future<Response<dynamic>> Function() request,
   ) async {
-    late final Response<dynamic> response;
+    var response = await _run(request);
 
-    try {
-      response = await request();
-    } on DioException catch (e) {
-      throw ApiException(_networkMessage(e));
+    if (response.statusCode == 401 &&
+        !_isAuthEndpoint(response.requestOptions.path)) {
+      final used = response.requestOptions.headers['Authorization'] as String?;
+
+      if (await _refreshSession(used)) {
+        response = await _run(request);
+      }
     }
 
     final status = response.statusCode ?? 0;
@@ -125,6 +151,72 @@ class ApiClient {
 
     return response;
   }
+
+  Future<Response<dynamic>> _run(
+    Future<Response<dynamic>> Function() request,
+  ) async {
+    try {
+      return await request();
+    } on DioException catch (e) {
+      throw ApiException(_networkMessage(e));
+    }
+  }
+
+  /// Süren bir yenileme varsa ona katılır, yoksa başlatır.
+  Future<bool> _refreshSession(String? usedAuthorization) {
+    return _refreshInFlight ??= _refresh(usedAuthorization).whenComplete(() {
+      _refreshInFlight = null;
+    });
+  }
+
+  Future<bool> _refresh(String? usedAuthorization) async {
+    // Bu istek yoldayken başka bir istek zaten yenilemiş olabilir. O hâlde
+    // tekrar yenilemek, henüz kullanılmamış geçerli bir token'ı boşuna
+    // döndürür — isteği yeni token'la tekrarlamak yeter.
+    final current = await _tokenStorage.readAccessToken();
+
+    if (current != null && 'Bearer $current' != usedAuthorization) {
+      return true;
+    }
+
+    final refreshToken = await _tokenStorage.readRefreshToken();
+
+    if (refreshToken == null) return false;
+
+    final Response<dynamic> response;
+
+    try {
+      response = await _dio.post<dynamic>(
+        '/auth/refresh',
+        data: {'refreshToken': refreshToken},
+      );
+    } on DioException {
+      // Ağ hatası oturumun bittiği anlamına gelmez; token'lara dokunmuyoruz
+      // ki kullanıcı bağlantı geri geldiğinde kaldığı yerden devam etsin.
+      return false;
+    }
+
+    final body = _asJson(response.data);
+
+    if ((response.statusCode ?? 0) < 400 && body != null) {
+      final tokens = AuthResponse.fromJson(body);
+
+      await _tokenStorage.save(
+        accessToken: tokens.accessToken,
+        refreshToken: tokens.refreshToken,
+      );
+
+      return true;
+    }
+
+    // Sunucu refresh token'ı da reddetti: oturum gerçekten bitmiş.
+    await _tokenStorage.clear();
+    _onSessionExpired?.call();
+
+    return false;
+  }
+
+  static bool _isAuthEndpoint(String path) => path.startsWith('/auth/');
 
   static String? _serverMessage(dynamic data) {
     if (data is Map<String, dynamic>) {

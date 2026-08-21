@@ -7,6 +7,7 @@ using SereneCycle.Application.Auth;
 using SereneCycle.Application.Content;
 using SereneCycle.Application.Logs;
 using SereneCycle.Application.Phases;
+using SereneCycle.Application.Privacy;
 using SereneCycle.Application.Profiles;
 using SereneCycle.Application.Risk;
 using SereneCycle.Infrastructure.Content;
@@ -54,6 +55,7 @@ public static class DependencyInjection
         services.AddScoped<ITokenService, TokenService>();
         services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<IProfileService, ProfileService>();
+        services.AddScoped<IAccountDataService, AccountDataService>();
         services.AddScoped<IPhaseService, PhaseService>();
         // Katalog seed verisidir ve çalışma anında değişmez: süreç başına
         // tek kopya yeter, üstelik her öneri isteğinden bir sorgu düşer.

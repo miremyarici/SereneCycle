@@ -1,13 +1,16 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using SereneCycle.Application.Auth;
+using SereneCycle.Application.Privacy;
 using SereneCycle.Application.Profiles;
 
 namespace SereneCycle.Api.Controllers;
 
 [Route("me")]
 [Authorize]
-public class MeController(IProfileService profileService) : ApiControllerBase
+public class MeController(
+    IProfileService profileService,
+    IAccountDataService accountDataService) : ApiControllerBase
 {
     /// <summary>Giriş yapmış kullanıcının profili ve döngü ayarları.</summary>
     [HttpGet]
@@ -30,6 +33,32 @@ public class MeController(IProfileService profileService) : ApiControllerBase
         CancellationToken cancellationToken) =>
         OkOrProblem(await profileService.UpdateAsync(
             CurrentUserId, request, cancellationToken));
+
+    /// <summary>
+    /// Hesabı ve ona bağlı bütün veriyi kalıcı olarak siler. Geri alınamaz,
+    /// bu yüzden mevcut şifre istenir.
+    /// </summary>
+    [HttpDelete]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    public async Task<ActionResult> Delete(
+        DeleteAccountRequest request,
+        CancellationToken cancellationToken) =>
+        NoContentOrProblem(await accountDataService.DeleteAsync(
+            CurrentUserId, request, cancellationToken));
+
+    /// <summary>
+    /// KVKK veri taşınabilirliği: kullanıcının bütün verisi tek bir JSON
+    /// belgesinde. Profil fotoğrafı dahil değildir, <c>GET /me/avatar</c>
+    /// ile ayrıca indirilir.
+    /// </summary>
+    [HttpGet("export")]
+    [ProducesResponseType(typeof(UserDataExport), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<UserDataExport>> Export(
+        CancellationToken cancellationToken) =>
+        OkOrProblem(await accountDataService.ExportAsync(
+            CurrentUserId, cancellationToken));
 
     // --- Profil fotoğrafı --------------------------------------------------
 

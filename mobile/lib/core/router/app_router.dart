@@ -16,18 +16,38 @@ import '../../features/onboarding/presentation/onboarding_screen.dart';
 import '../../features/profile/presentation/account_settings_screen.dart';
 import '../../features/profile/presentation/cycle_settings_screen.dart';
 import '../../features/profile/presentation/profile_screen.dart';
+import '../../features/profile/presentation/privacy_screen.dart';
+import '../../features/splash/presentation/splash_screen.dart';
+import '../providers/app_providers.dart';
 import 'app_shell.dart';
 import 'route_paths.dart';
 
 final _rootNavigatorKey = GlobalKey<NavigatorState>();
 
-/// Uygulama giriş ekranından başlar. Auth akışı ve onboarding shell'in
-/// dışında (alt menüsüz), içerik ekranları 4 sekmeli shell'in içinde.
+/// Uygulama açılış ekranından başlar: orada oturum geri kurulur ve
+/// [_redirect] kullanıcıyı gideceği yere alır. Auth akışı ve onboarding
+/// shell'in dışında (alt menüsüz), içerik ekranları 4 sekmeli shell'in
+/// içinde.
 final appRouterProvider = Provider<GoRouter>((ref) {
+  // Oturum değiştiğinde router'ın yönlendirmeyi yeniden değerlendirmesi
+  // gerekiyor. Provider `ref.watch` ile oturuma bağlanamaz: her değişimde
+  // yepyeni bir GoRouter kurulur ve gezinme geçmişi sıfırlanırdı.
+  final refresh = ValueNotifier<int>(0);
+  ref.listen(authControllerProvider, (_, _) => refresh.value++);
+  ref.onDispose(refresh.dispose);
+
   return GoRouter(
     navigatorKey: _rootNavigatorKey,
-    initialLocation: RoutePaths.login,
+    initialLocation: RoutePaths.splash,
+    refreshListenable: refresh,
+    redirect: (context, state) => _redirect(ref, state),
     routes: [
+      GoRoute(
+        path: RoutePaths.splash,
+        name: 'splash',
+        builder: (context, state) => const SplashScreen(),
+      ),
+
       // --- transactional / alt menüsüz ---
       GoRoute(
         path: RoutePaths.login,
@@ -129,6 +149,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                     name: 'cycleSettings',
                     builder: (context, state) => const CycleSettingsScreen(),
                   ),
+                  GoRoute(
+                    path: RoutePaths.privacySegment,
+                    name: 'privacy',
+                    builder: (context, state) => const PrivacyScreen(),
+                  ),
                 ],
               ),
             ],
@@ -138,3 +163,37 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     ],
   );
 });
+
+/// Oturum durumunun tek karar noktası. Ekranlar kendi başına "token var mı,
+/// onboarding bitti mi" sorusunu cevaplamıyor: aynı soru iki yerde
+/// cevaplanırsa er geç ikisi ayrışır ve kullanıcı arada kalır.
+String? _redirect(Ref ref, GoRouterState state) {
+  final auth = ref.read(authControllerProvider);
+  final location = state.matchedLocation;
+
+  // Oturum henüz geri kurulmadı: açılış ekranında bekle.
+  if (auth.isLoading && !auth.hasValue) {
+    return location == RoutePaths.splash ? null : RoutePaths.splash;
+  }
+
+  // Beklenmedik bir hatada değer yoktur; oturumsuz kabul etmek kullanıcıyı
+  // açılış ekranında kilitlemekten iyidir.
+  final user = auth.value;
+
+  if (user == null) {
+    return RoutePaths.isPublic(location) ? null : RoutePaths.login;
+  }
+
+  // Onboarding bitmeden içerik ekranları anlamsız: `/phase/today` döngü
+  // kaydı olmadan 404 döner.
+  if (!user.hasCompletedOnboarding) {
+    return location == RoutePaths.onboarding ? null : RoutePaths.onboarding;
+  }
+
+  // Oturum açıkken giriş/kayıt akışında ya da açılış ekranında kalınmaz.
+  if (RoutePaths.isPublic(location) || location == RoutePaths.splash) {
+    return RoutePaths.home;
+  }
+
+  return null;
+}

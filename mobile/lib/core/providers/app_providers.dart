@@ -1,5 +1,4 @@
-import 'dart:typed_data';
-
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../api/api_client.dart';
@@ -9,43 +8,127 @@ import '../api/token_storage.dart';
 
 final tokenStorageProvider = Provider<TokenStorage>((ref) => TokenStorage());
 
-final apiClientProvider = Provider<ApiClient>(
-  (ref) => ApiClient(ref.watch(tokenStorageProvider)),
-);
+/// Oturumun sunucu tarafından geçersiz sayıldığını duyuran sinyal.
+/// [ApiClient] ile [AuthController] arasına bilinçli olarak giriyor: istemci
+/// doğrudan controller'ı okusaydı iki provider birbirini kurmaya çalışır ve
+/// döngü oluşurdu.
+class SessionExpiredSignal extends ChangeNotifier {
+  void raise() => notifyListeners();
+}
+
+final sessionExpiredProvider = Provider<SessionExpiredSignal>((ref) {
+  final signal = SessionExpiredSignal();
+  ref.onDispose(signal.dispose);
+  return signal;
+});
+
+final apiClientProvider = Provider<ApiClient>((ref) {
+  final signal = ref.watch(sessionExpiredProvider);
+
+  return ApiClient(
+    ref.watch(tokenStorageProvider),
+    onSessionExpired: signal.raise,
+  );
+});
 
 final sereneApiProvider = Provider<SereneApi>(
   (ref) => SereneApi(ref.watch(apiClientProvider)),
 );
 
-/// Giriş yapmış kullanıcı. null ise oturum yok.
-class AuthController extends Notifier<UserSummary?> {
+/// Giriş yapmış kullanıcı. `null` ise oturum yok; yükleniyor durumu yalnızca
+/// uygulama açılırken görülür — o sırada güvenli depodaki refresh token'la
+/// oturum geri kurulmaya çalışılır.
+class AuthController extends AsyncNotifier<UserSummary?> {
+  /// Oturum geri kurulurken gelen 401'i [_restoreSession] zaten ele alıyor.
+  /// Build sürerken durumu dışarıdan yazmak Riverpod'da hata olurdu, bu
+  /// yüzden sinyal o aralıkta yok sayılır.
+  bool _isRestoring = false;
+
   @override
-  UserSummary? build() => null;
+  Future<UserSummary?> build() async {
+    final signal = ref.watch(sessionExpiredProvider);
+    signal.addListener(_onSessionExpired);
+    ref.onDispose(() => signal.removeListener(_onSessionExpired));
+
+    _isRestoring = true;
+
+    try {
+      return await _restoreSession();
+    } finally {
+      _isRestoring = false;
+    }
+  }
+
+  /// Uygulama açılışında oturumu geri kurar. Güvenli depoda refresh token
+  /// yoksa sunucuya hiç gidilmez; varsa `/me` ile hem token'ın hâlâ geçerli
+  /// olduğu doğrulanır hem de yönlendirme için gereken profil alınır.
+  Future<UserSummary?> _restoreSession() async {
+    final storage = ref.read(tokenStorageProvider);
+
+    try {
+      if (await storage.readRefreshToken() == null) return null;
+
+      // Erişim token'ı çoktan dolmuş olabilir; [ApiClient] bu isteği
+      // yenilenmiş token'la kendisi tekrarlar.
+      return await ref.read(sereneApiProvider).getMe();
+    } on ApiException catch (e) {
+      // Sunucu reddettiyse token'lar gerçekten ölü. Ağ hatasında (durum
+      // kodu yok) dokunmuyoruz: bağlantı yok diye kullanıcıyı oturumdan
+      // düşürmek, bir dahaki açılışta yeniden giriş yaptırmak demek olurdu.
+      if (e.statusCode != null) await storage.clear();
+      return null;
+    } catch (_) {
+      // Güvenli depo okunamadı (widget testinde platform kanalı yok,
+      // cihazda anahtar zinciri kilitli olabilir): oturumsuz başla.
+      return null;
+    }
+  }
 
   Future<void> signIn(String email, String password) async {
-    final api = ref.read(sereneApiProvider);
-    final response = await api.login(email, password);
+    final response =
+        await ref.read(sereneApiProvider).login(email, password);
 
-    await ref.read(tokenStorageProvider).save(
-          accessToken: response.accessToken,
-          refreshToken: response.refreshToken,
-        );
-
-    state = response.user;
+    await _startSession(response);
   }
 
-  Future<void> completeVerification(AuthResponse response) async {
-    await ref.read(tokenStorageProvider).save(
-          accessToken: response.accessToken,
-          refreshToken: response.refreshToken,
-        );
+  Future<void> completeVerification(AuthResponse response) =>
+      _startSession(response);
 
-    state = response.user;
-  }
+  /// Onboarding bittiğinde çağrılır: `hasCompletedOnboarding` değişti,
+  /// yönlendirme bunu bilmeden kullanıcıyı sihirbaza geri gönderirdi.
+  void updateUser(UserSummary user) => state = AsyncData(user);
 
   Future<void> signOut() async {
     await ref.read(tokenStorageProvider).clear();
-    state = null;
+    _endSession();
+  }
+
+  /// Hesabı ve sunucudaki bütün veriyi kalıcı olarak siler.
+  Future<void> deleteAccount(String currentPassword) async {
+    await ref.read(sereneApiProvider).deleteAccount(currentPassword);
+
+    // Sunucudaki oturumlar hesapla birlikte gitti; yereldeki token de gitsin.
+    await ref.read(tokenStorageProvider).clear();
+    _endSession();
+  }
+
+  Future<void> _startSession(AuthResponse response) async {
+    await ref.read(tokenStorageProvider).save(
+          accessToken: response.accessToken,
+          refreshToken: response.refreshToken,
+        );
+
+    state = AsyncData(response.user);
+  }
+
+  void _onSessionExpired() {
+    if (_isRestoring) return;
+    _endSession();
+  }
+
+  void _endSession() {
+    state = const AsyncData(null);
+
     // Kullanıcıya özel verileri de düşür ki sonraki oturum temiz başlasın.
     ref.invalidate(phaseTodayProvider);
     ref.invalidate(nutritionProvider);
@@ -60,7 +143,7 @@ class AuthController extends Notifier<UserSummary?> {
 }
 
 final authControllerProvider =
-    NotifierProvider<AuthController, UserSummary?>(AuthController.new);
+    AsyncNotifierProvider<AuthController, UserSummary?>(AuthController.new);
 
 // --- Veri sağlayıcıları ---
 

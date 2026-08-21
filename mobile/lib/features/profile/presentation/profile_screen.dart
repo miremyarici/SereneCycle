@@ -37,10 +37,10 @@ class ProfileScreen extends ConsumerWidget {
             const _PreferencesCard(),
             const SizedBox(height: 24),
             _LogOutButton(
-              onPressed: () async {
-                await ref.read(authControllerProvider.notifier).signOut();
-                if (context.mounted) context.go(RoutePaths.login);
-              },
+              // Giriş ekranına dönüşü router üstleniyor: oturum düşünce
+              // yönlendirme kullanıcıyı zaten oraya alıyor.
+              onPressed: () =>
+                  ref.read(authControllerProvider.notifier).signOut(),
             ),
           ],
         ),
@@ -185,22 +185,22 @@ class _PreferencesCard extends StatelessWidget {
   const _PreferencesCard();
 
   @override
-  Widget build(BuildContext context) => const SoftShadowCard(
+  Widget build(BuildContext context) => SoftShadowCard(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            SectionTitle('TERCİHLER'),
-            SizedBox(height: 8),
-            _SettingRow(
+            const SectionTitle('TERCİHLER'),
+            const SizedBox(height: 8),
+            const _SettingRow(
               icon: Icons.notifications_outlined,
               label: 'Bildirimler',
               value: 'Yakında',
             ),
-            Divider(height: 24, color: AppColors.outlineVariant),
-            _SettingRow(
+            const Divider(height: 24, color: AppColors.outlineVariant),
+            _ActionRow(
               icon: Icons.lock_outline,
-              label: 'Gizlilik ve güvenlik',
-              value: 'Yakında',
+              label: 'Verilerin ve hesabın',
+              onTap: () => context.push(RoutePaths.privacy),
             ),
           ],
         ),

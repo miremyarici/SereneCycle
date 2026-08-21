@@ -13,6 +13,7 @@ import '../../../core/widgets/app_snack_bar.dart';
 import '../../../core/widgets/async_view.dart';
 import '../../../core/widgets/avatar_circle.dart';
 import '../../../core/widgets/circle_icon.dart';
+import '../../../core/widgets/form_dialog.dart';
 import '../../../core/widgets/section_title.dart';
 import '../../../core/widgets/soft_shadow_card.dart';
 import '../../../core/widgets/underlined_text_field.dart';
@@ -230,7 +231,7 @@ Future<void> _showNameDialog(
 
   await showDialog<void>(
     context: context,
-    builder: (context) => _FormDialog(
+    builder: (context) => FormDialog(
       title: 'İsmini değiştir',
       submitLabel: 'Kaydet',
       fields: () => [
@@ -259,7 +260,7 @@ Future<void> _showEmailDialog(BuildContext context, WidgetRef ref) async {
 
   final requested = await showDialog<bool>(
     context: context,
-    builder: (context) => _FormDialog(
+    builder: (context) => FormDialog(
       title: 'E-postanı değiştir',
       description: 'Yeni adresine bir doğrulama kodu göndereceğiz.',
       submitLabel: 'Kod gönder',
@@ -298,7 +299,7 @@ Future<void> _showEmailDialog(BuildContext context, WidgetRef ref) async {
 
   await showDialog<void>(
     context: context,
-    builder: (context) => _FormDialog(
+    builder: (context) => FormDialog(
       title: 'Yeni adresini doğrula',
       description: 'Yeni e-posta adresine gönderdiğimiz 6 haneli kodu gir.',
       submitLabel: 'Onayla',
@@ -331,7 +332,7 @@ Future<void> _showPasswordDialog(BuildContext context, WidgetRef ref) async {
 
   await showDialog<void>(
     context: context,
-    builder: (context) => _FormDialog(
+    builder: (context) => FormDialog(
       title: 'Parolanı değiştir',
       submitLabel: 'Kaydet',
       fields: () => [
@@ -368,127 +369,6 @@ Future<void> _showPasswordDialog(BuildContext context, WidgetRef ref) async {
       },
     ),
   );
-}
-
-/// Doğrulama, yükleme durumu ve hata gösterimini tek yerde toplayan pop-up.
-/// [onSubmit] başarılıysa döndürdüğü metin snackbar'da gösterilir.
-class _FormDialog<T> extends StatefulWidget {
-  const _FormDialog({
-    required this.title,
-    required this.submitLabel,
-    required this.fields,
-    required this.onSubmit,
-    this.description,
-    this.resultOnSuccess,
-  });
-
-  final String title;
-  final String? description;
-  final String submitLabel;
-  final List<Widget> Function() fields;
-  final Future<String> Function() onSubmit;
-  final T? resultOnSuccess;
-
-  @override
-  State<_FormDialog<T>> createState() => _FormDialogState<T>();
-}
-
-class _FormDialogState<T> extends State<_FormDialog<T>> {
-  final _formKey = GlobalKey<FormState>();
-  bool _isSubmitting = false;
-  String? _error;
-
-  Future<void> _submit() async {
-    if (!_formKey.currentState!.validate()) return;
-
-    setState(() {
-      _isSubmitting = true;
-      _error = null;
-    });
-
-    // Pop'tan sonra bu context ölüyor; messenger'ı önceden alıyoruz.
-    final messenger = ScaffoldMessenger.of(context);
-    final navigator = Navigator.of(context);
-
-    try {
-      final message = await widget.onSubmit();
-
-      if (!mounted) return;
-
-      navigator.pop(widget.resultOnSuccess);
-      messenger.showSnackBar(SnackBar(content: Text(message)));
-    } on ApiException catch (e) {
-      if (mounted) {
-        setState(() {
-          _error = e.message;
-          _isSubmitting = false;
-        });
-      }
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) => AlertDialog(
-        backgroundColor: AppColors.surfaceContainerLowest,
-        title: Text(
-          widget.title,
-          style:
-              context.text.headlineSmall?.copyWith(color: AppColors.primary),
-        ),
-        content: Form(
-          key: _formKey,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              if (widget.description != null) ...[
-                Text(
-                  widget.description!,
-                  style: context.text.bodyMedium
-                      ?.copyWith(color: AppColors.onSurfaceVariant),
-                ),
-                const SizedBox(height: 16),
-              ],
-              ...widget.fields(),
-              if (_error != null) ...[
-                const SizedBox(height: 16),
-                Text(
-                  _error!,
-                  style:
-                      context.text.bodyMedium?.copyWith(color: AppColors.error),
-                ),
-              ],
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: _isSubmitting ? null : () => Navigator.of(context).pop(),
-            style: TextButton.styleFrom(
-              foregroundColor: AppColors.onSurfaceVariant,
-            ),
-            child: const Text('Vazgeç'),
-          ),
-          FilledButton(
-            onPressed: _isSubmitting ? null : _submit,
-            style: FilledButton.styleFrom(
-              backgroundColor: AppColors.primary,
-              foregroundColor: AppColors.onPrimary,
-              shape: const StadiumBorder(),
-            ),
-            child: _isSubmitting
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: AppColors.onPrimary,
-                    ),
-                  )
-                : Text(widget.submitLabel),
-          ),
-        ],
-      );
 }
 
 // --- Ortak parçalar --------------------------------------------------------

@@ -77,6 +77,17 @@ class SereneApi {
     return UserSummary.fromJson(json!);
   }
 
+  /// KVKK veri taşınabilirliği: hesaptaki her şey tek bir JSON belgesinde.
+  Future<UserDataExport> exportMyData() async {
+    final json = await _client.get('/me/export');
+    return UserDataExport.fromJson(json!);
+  }
+
+  /// Hesabı ve sunucudaki bütün veriyi kalıcı olarak siler. Şifre, geri
+  /// alınamaz işlem için ikinci onay yerine geçer.
+  Future<void> deleteAccount(String currentPassword) =>
+      _client.delete('/me', data: {'currentPassword': currentPassword});
+
   Future<Uint8List?> getAvatar() => _client.getBytes('/me/avatar');
 
   Future<UserSummary> updateAvatar({

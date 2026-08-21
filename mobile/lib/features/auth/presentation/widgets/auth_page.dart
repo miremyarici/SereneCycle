@@ -21,7 +21,7 @@ class AuthPage extends StatelessWidget {
 
   /// true ise geri oklu bir [AppBar] çizilir.
   final bool hasBackButton;
-  final String? title;
+  final Widget? title;
 
   /// İçerik ekrandan kısaysa dikeyde ortalansın mı.
   final bool isCentered;
@@ -43,7 +43,7 @@ class AuthPage extends StatelessWidget {
                 icon: const Icon(Icons.arrow_back),
                 onPressed: () => context.pop(),
               ),
-              title: title == null ? null : Text(title!),
+              title: title,
               centerTitle: true,
             )
           : null,
